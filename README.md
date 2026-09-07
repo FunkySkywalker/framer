@@ -18,6 +18,14 @@ A desktop app that **batch-frames images** onto a user-defined
 - **Save**: maximum quality per format, **EXIF and ICC profiles preserved
   verbatim**, multi-frame (GIF / APNG / animated WebP) supported per-frame
 
+> ### A word before you go any further
+>
+> This app is **purely vibe-coded**: designed, written, and debugged in a
+> long collaborative session with an AI coding agent, with a human steering
+> the direction (and occasionally vetoing ideas). It works, and it is
+> tested — but it carries the character of how it was made. If you do not
+> like that, well then: please do not use it. :-)
+
 Two frontends exist during the [Qt migration](#qt-migration-in-progress):
 the GTK 4 + Libadwaita app (`main.py`, current default) and the PySide6
 app (`main_qt.py`, feature-complete, offscreen-verified). Both share the
@@ -26,15 +34,17 @@ below applies to both.
 
 ## Prerequisites
 
-Ubuntu 26.04 desktop already has everything for the GTK app:
+Tested on an Ubuntu 26.04 desktop, which already has everything for the
+GTK app:
 
 | Package | Provides |
 |---|---|
 | `python3-gi` + `gir1.2-gtk-4.0` | PyGObject, GTK 4.22 typelibs |
 | `gir1.2-adw-1` | Libadwaita 1.9 |
-| `Pillow` (12.x on this machine) | image decode/encode |
+| `Pillow` | image decode/encode (12.x on the test machine) |
 
-No downloads are required to run the GTK app. The Qt app needs one more
+Any recent Ubuntu GNOME desktop with the same packages will do. No
+downloads are required to run the GTK app. The Qt app needs one more
 package, installed in an isolated venv (see below): `PySide6` (6.11.x).
 
 ## Running
@@ -54,9 +64,9 @@ python3 -m venv --system-site-packages .venv
 .venv/bin/python main.py [IMAGE ...]
 ```
 
-Note: the bundled `.venv` is isolated (no system site packages) and cannot
-see the system PyGObject — recreate it with
-`--system-site-packages` if you want to use it.
+Note: a plain isolated venv (the default) cannot see the system
+PyGObject — create it with `--system-site-packages` if you want to use a
+venv at all.
 
 **(c) Qt app (migration target):**
 
@@ -67,8 +77,9 @@ python3 -m venv .venv-qt
 ```
 
 Headless/offscreen: `QT_QPA_PLATFORM=offscreen .venv-qt/bin/python
-scripts/theme_report.py` (this machine additionally needs the EGL shim —
-see `AGENTS.md`, *Qt frontend notes*).
+scripts/theme_report.py` (on systems without libEGL, offscreen runs
+additionally need a small EGL shim — see `AGENTS.md`, *Qt frontend
+notes*).
 
 ### GSettings persistence (GTK app, optional)
 
@@ -77,7 +88,7 @@ short edge persist across sessions when the schema is installed:
 
 ```sh
 install -d ~/.local/share/glib-2.0/schemas
-cp data/com.funkyskywalker.Framer.gschema.xml ~/.local/share/glib-2.0/schemas/
+cp data/org.framer.Framer.gschema.xml ~/.local/share/glib-2.0/schemas/
 glib-compile-schemas ~/.local/share/glib-2.0/schemas
 ```
 
@@ -87,8 +98,8 @@ still works, settings just don't survive a restart.
 ### QSettings persistence (Qt app)
 
 The Qt app persists the **same eight keys with the same defaults** to a
-QSettings INI file: `~/.config/com.funkyskywalker/Framer.conf`. The two
-stores are independent — values are not migrated between them.
+QSettings INI file: `~/.config/org.framer/Framer.conf`. The two stores are
+independent — values are not migrated between them.
 
 ## Qt migration (in progress)
 
@@ -98,13 +109,11 @@ KDE/Breeze) and Windows 11 (Fluent) — the app follows the system's style,
 palette, font, and icon theme and adds only a minimal palette-derived QSS
 layer.
 
-- **Plan & status**: `.agent/feature-migration-qt/plan.md` (8 phases,
-  verification gates) and `progress.md` (what's done, pitfalls found)
 - **Current state**: Phases 1–7 done — the Qt frontend lives in
   `framer/qt/` (entry `main_qt.py`) and is verified end-to-end offscreen:
   full batch runs with EXIF/ICC byte-identity, settings persistence with
   restart restore, deterministic cancellation, theming across five palette
-  variants. Screenshots: `.agent/feature-migration-qt/screenshots/`
+  variants (the offscreen verification harnesses live in `scripts/`)
 - **Remaining**: a real-machine theme review (GNOME light + dark, Windows
   11 light + dark — `.venv-qt/bin/python scripts/theme_report.py`), then
   the Phase 8 cutover: `main.py` becomes the Qt entry point and
@@ -169,8 +178,8 @@ Other multi-frame formats: first frame + a warning toast.
 
 ## Limitations
 
-- **AVIF / JXL / HEIC** are not decodable on this system (no Pillow
-  plugins) — such files are rejected with a visible error, never silently.
+- **AVIF / JXL / HEIC** are not decodable by default (no Pillow plugins)
+  — such files are rejected with a visible error, never silently.
 - Output size/aspect is **user-defined** and not tied to the source size.
 - Preserved EXIF blobs keep their original pixel-dimension tags
   (`ExifImageWidth/Height`), which are stale when the canvas differs from
@@ -180,4 +189,4 @@ Other multi-frame formats: first frame + a warning toast.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

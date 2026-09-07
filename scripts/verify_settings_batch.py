@@ -101,7 +101,7 @@ def main() -> int:
     app = QApplication.instance()
     if app is None:
         app = QApplication(["verify-q6"])
-    app.setOrganizationName("com.funkyskywalker")
+    app.setOrganizationName("org.framer")
     app.setApplicationName("Framer")
     SCREENSHOTS.mkdir(parents=True, exist_ok=True)
     tmp = sandbox / "imgs"

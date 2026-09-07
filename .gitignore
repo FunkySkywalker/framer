@@ -3,10 +3,10 @@ __pycache__/
 .venv/
 .venv-qt/
 .pi/
-# Qt-migration dev artifacts (EGL shim binary + install log stay local;
-# screenshots are committed as phase verification evidence)
-.agent/feature-migration-qt/qtlibs/
-.agent/feature-migration-qt/venv_install.log
-.agent/feature-migration-qt/screenshots/theme-fixtures/
 .idea/
 .DS_Store
+
+# Local tooling / working notes — not part of the project
+.mcp.json
+plan.md
+.agent/

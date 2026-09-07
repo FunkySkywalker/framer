@@ -2,8 +2,8 @@
 
 Replaces the GSettings / in-memory fallback service: same key names and
 defaults, preserved for continuity. QSettings identity comes from the
-application (organization ``com.funkyskywalker``, application
-``Framer``) → ``~/.config/com.funkyskywalker/Framer/Framer.conf``.
+application (organization ``org.framer``, application
+``Framer``) → ``~/.config/org.framer/Framer.conf``.
 Existing GSettings values are NOT migrated (documented; values are
 trivial to re-enter).
 """

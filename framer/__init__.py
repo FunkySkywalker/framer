@@ -3,5 +3,5 @@
 A GNOME (GTK4 + Libadwaita) desktop application built with PyGObject.
 """
 
-APP_ID = "com.funkyskywalker.Framer"
+APP_ID = "org.framer.Framer"
 __version__ = "1.0.0"

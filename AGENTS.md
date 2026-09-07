@@ -4,7 +4,7 @@ Hard rules for agentic work in this repository.
 
 Two frontends exist during the Qt migration: `framer/gtk/` (frozen, the
 current default via `main.py`) and `framer/qt/` (migration target via
-`main_qt.py`). Plan + status: `.agent/feature-migration-qt/{plan,progress}.md`.
+`main_qt.py`).
 
 ## Layering law (do not break)
 
@@ -53,11 +53,10 @@ current default via `main.py`) and `framer/qt/` (migration target via
 
 ## How to run
 
-Two frontends exist during the Qt migration (see
-`.agent/feature-migration-qt/plan.md`); Phase 8 removes the GTK one.
+Two frontends exist during the Qt migration; Phase 8 removes the GTK one.
 
-- GTK app: `python3 main.py` (Ubuntu 26.04 desktop has PyGObject, GTK
-  4.22, Libadwaita 1.9, Pillow 12).
+- GTK app: `python3 main.py` (tested on Ubuntu 26.04 desktop: system
+  PyGObject, GTK 4.22, Libadwaita 1.9, Pillow 12).
 - GTK app in a venv: `python3 -m venv --system-site-packages .venv &&
   .venv/bin/pip install -r requirements.txt && .venv/bin/python main.py`
   (the isolated default venv cannot see system PyGObject).
@@ -113,27 +112,25 @@ framer/
 2. `framer/core/image_io.py` — save table in `_save` / `_resolve_save_mode`
    (and working-mode map in `framer/core/framing.py` if a new mode appears)
 
-## Commit style
-
-When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
-
 ## Qt frontend notes (PySide6 6.11.2 — for `framer/qt/`)
 
-- **Offscreen runs need the EGL shim** (this machine has no libEGL):
+- **Offscreen runs on systems without libEGL need a small shim**
+  (e.g. some minimal VMs):
   `QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=.agent/feature-migration-qt/qtlibs
-  .venv-qt/bin/python ...`. The shim is a symlink to Electron's bundled
-  libEGL: `ln -s ~/.hermes/hermes-agent/node_modules/electron/dist/libEGL.so
+  .venv-qt/bin/python ...`. The shim is a symlink to any libEGL
+  implementation — an Electron install bundles a suitable `libEGL.so` in
+  its `dist/` directory: `ln -s /path/to/electron/dist/libEGL.so
   .agent/feature-migration-qt/qtlibs/libEGL.so.1`; `qtlibs/` is
   gitignored — recreate it if missing. Verification scripts self-re-exec
-  with the env baked in, so run them plain.
+  with the env baked in, so they run plain.
 - The gtk3 platform theme ABORTS offscreen ("cannot open display") —
   never set `QT_QPA_PLATFORMTHEME=gtk3` in offscreen harnesses.
-- **Type check**: `~/.local/bin/ty check --python .venv-qt/bin/python
+- **Type check**: `ty check --python .venv-qt/bin/python
   framer/qt/ ...` (system python has no PySide6; the qt venv has no
   `gi`, so a whole-repo run shows pre-existing gi diagnostics — ignore
   those, fix the rest).
 - PySide6 6.11.2 pitfalls (all verified on this stack; full history in
-  `progress.md`):
+  the migration progress notes on the internal repo):
   - `QButtonBox` is REMOVED — plain `QPushButton`s.
   - `QKeySequence("Ctrl+Period")` parses empty — the key string is
     `"Ctrl+."` (Ctrl+Key_Period).
@@ -158,8 +155,8 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
   - `.clicked` fires only for user clicks — programmatic state changes
     need `.toggled`.
   - `QSettings.value()` returns mixed types — normalize via `str()`
-    before int/float/bool; identity = org `com.funkyskywalker`, app
-    `Framer` → `$XDG_CONFIG_HOME/com.funkyskywalker/Framer.conf`.
+    before int/float/bool; identity = org `org.framer`, app `Framer` →
+    `$XDG_CONFIG_HOME/org.framer/Framer.conf`.
   - `styleHints().colorScheme()` is a METHOD and the `ColorScheme` enum
     is NOT exported — compare `str(...).endswith("Dark")`.
   - `colorSchemeChanged` passes the enum as an argument — connected slots
@@ -179,12 +176,11 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
   forces a palette (also the offscreen hook). The QSS re-applies on
   `colorSchemeChanged` (live light/dark switching).
 - **Verification convention**: each phase has an offscreen script under
-  `scripts/` and committed screenshots under
-  `.agent/feature-migration-qt/screenshots/` (qtlibs + venv_install.log +
-  theme-fixtures stay gitignored); screenshots must be looked at by the
-  main agent before a phase counts as done.
+  `scripts/` (each self-re-execs with the offscreen env + EGL shim baked
+  in, so they run plain); the shim dir (`.agent/feature-migration-qt/qtlibs/`),
+  `venv_install.log`, and theme fixtures stay local (gitignored).
 
-## API notes (this machine: GTK 4.22 / Libadwaita 1.9 — for `framer/gtk/`)
+## API notes (dev environment: Ubuntu 26.04, GTK 4.22 / Libadwaita 1.9 — for `framer/gtk/`)
 
 - No `Adw.StatusIcon` — use `Gtk.Image` with symbolic icons.
 - No `Adw.FileDialog` — use `Gtk.FileChooserNative` + `Gtk.FileFilter`. Constructor is `new(title: str|None, parent: Gtk.Window|None, action, accept_label, cancel_label)` — first arg is a *string*, not the window. Present it with `show()` — no `present()`; use the `response` signal.

@@ -170,7 +170,7 @@ def main() -> int:
         app = QApplication(["theme-report"])
     if not isinstance(app, QApplication):
         raise SystemExit("expected a QApplication")
-    app.setOrganizationName("com.funkyskywalker")
+    app.setOrganizationName("org.framer")
     app.setApplicationName("Framer")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 

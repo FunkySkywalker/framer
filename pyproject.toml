@@ -5,10 +5,9 @@ description = "Desktop app that batch-frames images onto a user-defined target c
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [{ name = "funkyskywalker" }]
 dependencies = [
     "Pillow>=10.0",
     # PyGObject>=3.50 is provided by the system package python3-gi
-    # (plus gir1.2-gtk-4.0 and gir1.2-adw-1); it is not pip-installable
-    # on this machine, so it is documented here as a comment.
+    # (plus gir1.2-gtk-4.0 and gir1.2-adw-1); it is not pip-installable,
+    # so it is documented here as a comment.
 ]

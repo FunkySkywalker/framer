@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="com.funkyskywalker.Framer" path="/com/funkyskywalker/Framer/">
+  <schema id="org.framer.Framer" path="/org/framer/Framer/">
 
     <key name="output-directory" type="s">
       <default>""</default>

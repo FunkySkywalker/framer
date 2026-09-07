@@ -1,8 +1,8 @@
 """Application shell for the Qt frontend.
 
 Owns the QApplication (QSettings identity: organization
-``com.funkyskywalker``, application ``Framer`` → INI in
-``~/.config/com.funkyskywalker/Framer/``) and the main window
+``org.framer``, application ``Framer`` → INI in
+``~/.config/org.framer/Framer.conf``) and the main window
 (:class:`framer.qt.window.FramerWindow`, built in Phase 5).
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication
 from .theme import apply_theme, pre_setup_environment
 from .window import FramerWindow
 
-ORGANIZATION = "com.funkyskywalker"
+ORGANIZATION = "org.framer"
 APPLICATION = "Framer"
 
 

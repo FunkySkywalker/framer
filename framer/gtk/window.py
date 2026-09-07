@@ -549,7 +549,6 @@ class FramerWindow(Adw.ApplicationWindow):
         about.set_modal(True)
         about.set_application_name("Framer")
         about.set_version(__version__)
-        about.set_developer_name("funkyskywalker")
         about.set_license_type(Gtk.License.MIT_X11)
         about.set_icon_name("image-x-generic")
         about.present()

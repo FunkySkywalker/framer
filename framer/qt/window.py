@@ -507,7 +507,6 @@ class FramerWindow(QMainWindow):
         box.setText(f"<b>Framer</b> &nbsp;{__version__}")
         box.setInformativeText(
             "Batch-frame images onto a user-defined target canvas.\n\n"
-            "Developer: funkyskywalker\n"
             "License: MIT (X11)"
         )
         box.setStandardButtons(QMessageBox.StandardButton.Ok)
