@@ -10,6 +10,10 @@
       "args": [
         "stdioMcpServer"
       ]
+    },
+    "pycharm": {
+      "url": "http://127.0.0.1:64344/stream",
+      "type": "http"
     }
   }
 }
