@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="com.funkyskywalker.Framer" path="/com/funkyskywalker/Framer/">
+
+    <key name="output-directory" type="s">
+      <default>""</default>
+      <summary>Output directory for framed images</summary>
+      <description>
+        Directory where framed images are written. An empty value means
+        "next to the source image" (same folder as each source file).
+      </description>
+    </key>
+
+    <key name="suffix" type="s">
+      <default>"_framed"</default>
+      <summary>File name suffix for framed images</summary>
+      <description>
+        Suffix inserted before the file extension of the output file name.
+        Example: photo.jpg becomes photo_framed.jpg.
+      </description>
+    </key>
+
+    <key name="frame-percent" type="d">
+      <default>5.0</default>
+      <range min="0.0" max="20.0"/>
+      <summary>White frame thickness as a percentage of each canvas edge</summary>
+      <description>
+        Thickness of the white frame on every side, as a percentage of the
+        target canvas edge. Two decimal places, 0.00 (no frame) to 20.00.
+      </description>
+    </key>
+
+    <key name="aspect-preset" type="s">
+      <default>"5:4"</default>
+      <choices>
+        <choice value="5:4"/>
+        <choice value="19:16"/>
+        <choice value="custom"/>
+      </choices>
+      <summary>Aspect ratio preset for the target canvas</summary>
+      <description>
+        One of the built-in aspect ratio presets (5:4, 19:16) or "custom",
+        which uses the aspect-num / aspect-den keys.
+      </description>
+    </key>
+
+    <key name="aspect-num" type="i">
+      <default>3</default>
+      <range min="1" max="999"/>
+      <summary>Custom aspect ratio numerator</summary>
+      <description>
+        Numerator A of the custom A:B aspect ratio. Used when
+        aspect-preset is "custom".
+      </description>
+    </key>
+
+    <key name="aspect-den" type="i">
+      <default>2</default>
+      <range min="1" max="999"/>
+      <summary>Custom aspect ratio denominator</summary>
+      <description>
+        Denominator B of the custom A:B aspect ratio. Used when
+        aspect-preset is "custom".
+      </description>
+    </key>
+
+    <key name="orientation-portrait" type="b">
+      <default>false</default>
+      <summary>Flip the target canvas to portrait</summary>
+      <description>
+        When false the canvas uses the aspect ratio as entered (landscape
+        bias); when true the ratio is flipped to portrait.
+      </description>
+    </key>
+
+    <key name="short-edge" type="i">
+      <default>1080</default>
+      <range min="16" max="8192"/>
+      <summary>Short-edge resolution of the target canvas in pixels</summary>
+      <description>
+        The short edge of the output canvas in pixels. The long edge is
+        derived from the aspect ratio (round-half-up), so the short edge is
+        exactly this value.
+      </description>
+    </key>
+
+  </schema>
+</schemalist>

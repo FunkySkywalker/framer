@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Framer
+Comment=Batch-frame images onto a user-defined target canvas
+# Adjust to the actual install location of this repository before deploying:
+Exec=python3 /usr/local/lib/framer/main.py %F
+Icon=image-x-generic
+Categories=Graphics;
+MimeType=image/jpeg;image/png;image/webp;image/tiff;image/bmp;image/x-ms-bmp;image/gif;image/apng;

@@ -1,16 +1,25 @@
-# This is a sample Python script.
+#!/usr/bin/env python3
+"""Framer entry point — thin CLI wrapper around FramerApplication.
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+Usage:
+    python3 main.py [IMAGE ...]
+
+Requires PyGObject + Libadwaita from the system (Ubuntu 26.04 desktop has
+both); see README.md for the two supported run paths.
+"""
+import sys
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from framer.app import FramerApplication
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+def main() -> int:
+    return FramerApplication().run(sys.argv)
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+if __name__ == "__main__":
+    raise SystemExit(main())

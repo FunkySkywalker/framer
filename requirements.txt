@@ -1,0 +1,8 @@
+# Framer — Python dependencies
+#
+# PyGObject>=3.50 — provided by the SYSTEM package (apt: python3-gi,
+# gir1.2-gtk-4.0, gir1.2-adw-1). It is NOT pip-installable on this machine,
+# so it is intentionally listed as a comment rather than a pip requirement.
+#
+# Pillow: image decode/encode (JPEG, PNG/APNG, TIFF, BMP, WebP, GIF).
+Pillow>=10.0
