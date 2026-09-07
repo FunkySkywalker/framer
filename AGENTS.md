@@ -84,11 +84,17 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
 ## API notes (this machine: GTK 4.22 / Libadwaita 1.9)
 
 - No `Adw.StatusIcon` — use `Gtk.Image` with symbolic icons.
-- No `Adw.FileDialog` — use `Gtk.FileChooserNative` + `Gtk.FileFilter`.
+- No `Adw.FileDialog` — use `Gtk.FileChooserNative` + `Gtk.FileFilter`. Constructor is `new(title: str|None, parent: Gtk.Window|None, action, accept_label, cancel_label)` — first arg is a *string*, not the window. Present it with `show()` — no `present()`; use the `response` signal.
 - `Gtk.ComboBox` is deprecated — use `Gtk.DropDown`
   (`new_from_strings`, `set_selected`, `notify::selected`).
-- `Adw.SpinRow`: construct with `Adw.SpinRow()` + `set_adjustment(adj)`;
-  `add_suffix` takes a widget (e.g. `Gtk.Label(label="%")`).
+- `Adw.SpinRow` (1.9): construct with `Adw.SpinRow()` +
+  `set_adjustment(adj)`; `add_suffix` takes a widget. **It renders NO slider
+  track** — it is a drag-to-scrub row + spin button only (verified against the
+  1.9.3 template and official doc image). For a *visible* slider use
+  `Adw.ActionRow` + suffix box with `Gtk.Scale` + `Gtk.SpinButton` sharing one
+  `Gtk.Adjustment` (see the frame row in `views/queue_view.py`).
+- `Gtk.Scale.set_width_chars` does not exist in this GTK4 build — size the
+  slider with `set_hexpand`/CSS.
 - `Adw.Spinner`: toggle via the `spinning` property (no `set_spinning` in
   this build).
 - `Gtk.SpinButton.new_with_range(...)`; no `set_page_increment` in GTK4.

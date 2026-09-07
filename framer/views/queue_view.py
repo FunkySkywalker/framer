@@ -100,24 +100,50 @@ class QueueView(Gtk.Box):
         controls.append(self.output_row)
 
         # -- frame row --
+        # NOTE: Adw.SpinRow in libadwaita 1.9 renders NO slider track
+        # (it is a drag-to-scrub row + spin button), so this app builds the
+        # slider explicitly: title + Gtk.Scale + SpinButton, one shared
+        # adjustment (see self.frame_adjustment).
         self.frame_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.frame_spinrow = Adw.SpinRow()
-        self.frame_spinrow.set_adjustment(
-            Gtk.Adjustment.new(
-                FRAME_PERCENT_DEFAULT,
-                FRAME_PERCENT_MIN,
-                FRAME_PERCENT_MAX,
-                0.01,
-                0.1,
-                0.0,
-            )
+        self.frame_adjustment = Gtk.Adjustment.new(
+            FRAME_PERCENT_DEFAULT,
+            FRAME_PERCENT_MIN,
+            FRAME_PERCENT_MAX,
+            0.01,
+            0.1,
+            0.0,
         )
-        self.frame_spinrow.set_digits(2)
-        self.frame_spinrow.add_suffix(Gtk.Label(label="%"))
+        self.frame_spinrow = Adw.ActionRow()
         self.frame_spinrow.set_title("Frame thickness")
         self.frame_spinrow.set_subtitle(
             "White frame on each side, % of the image edge"
         )
+        frame_children = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=8
+        )
+        frame_children.set_valign(Gtk.Align.CENTER)
+        self.frame_slider = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL,
+            FRAME_PERCENT_MIN,
+            FRAME_PERCENT_MAX,
+            0.01,
+        )
+        self.frame_slider.set_adjustment(self.frame_adjustment)
+        self.frame_slider.set_draw_value(False)
+        self.frame_slider.set_hexpand(True)
+        self.frame_slider.set_tooltip_text("Drag to set frame thickness")
+        frame_children.append(self.frame_slider)
+        self.frame_spin_button = Gtk.SpinButton.new_with_range(
+            FRAME_PERCENT_MIN, FRAME_PERCENT_MAX, 0.01
+        )
+        self.frame_spin_button.set_adjustment(self.frame_adjustment)
+        self.frame_spin_button.set_digits(2)
+        self.frame_spin_button.set_tooltip_text("Frame thickness in percent")
+        frame_children.append(self.frame_spin_button)
+        pct = Gtk.Label(label="%")
+        pct.add_css_class("dim-label")
+        frame_children.append(pct)
+        self.frame_spinrow.add_suffix(frame_children)
         self.frame_spinrow.set_hexpand(True)
         self.frame_row.append(self.frame_spinrow)
 
@@ -256,7 +282,7 @@ class QueueView(Gtk.Box):
     def get_short_edge_spin(self) -> Gtk.SpinButton:
         return self.short_edge_spin
 
-    def get_frame_row(self) -> Adw.SpinRow:
+    def get_frame_row(self) -> Adw.ActionRow:
         return self.frame_spinrow
 
     # -- internals ---------------------------------------------------------------

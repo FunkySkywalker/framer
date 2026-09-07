@@ -75,7 +75,9 @@ class FramerWindow(Adw.ApplicationWindow):
         )
         self._sync_orientation_label()
         self.view.short_edge_spin.set_value(float(self.settings.get_int("short-edge")))
-        self.view.frame_spinrow.set_value(self.settings.get_double("frame-percent"))
+        self.view.frame_adjustment.set_value(
+            self.settings.get_double("frame-percent")
+        )
         self._settings_guard = False
 
         # control changes → settings + live canvas preview
@@ -92,11 +94,15 @@ class FramerWindow(Adw.ApplicationWindow):
         self.view.short_edge_spin.connect(
             "value-changed", self._on_short_edge_changed
         )
-        self.view.frame_spinrow.get_adjustment().connect(
+        self.view.frame_adjustment.connect(
             "value-changed", self._on_frame_changed
         )
-        self.view.start_button.connect("clicked", self._on_start)
-        self.view.cancel_button.connect("clicked", self._on_cancel)
+        # "clicked" passes the button; the action path calls cb() bare —
+        # wrap so both land on the zero-arg handlers.
+        self.view.start_button.connect("clicked", lambda _b: self._on_start())
+        self.view.cancel_button.connect(
+            "clicked", lambda _b: self._on_cancel()
+        )
         self._sync_custom_revealer()
         self._refresh_output()
 
@@ -161,14 +167,12 @@ class FramerWindow(Adw.ApplicationWindow):
 
     def _on_add_files(self) -> None:
         chooser = Gtk.FileChooserNative.new(
-            self, None, Gtk.FileChooserAction.OPEN, "_Open", "_Cancel"
+            "Add Images", self, Gtk.FileChooserAction.OPEN, "_Add", "_Cancel"
         )
-        chooser.set_title("Add Images")
-        chooser.set_accept_label("_Add")
         chooser.set_select_multiple(True)
         chooser.add_filter(self._image_filter())
         chooser.connect("response", self._on_files_response)
-        chooser.present()
+        chooser.show()  # FileChooserNative: show(), no present()
 
     def _on_files_response(self, chooser, response) -> None:
         if response == Gtk.ResponseType.ACCEPT:
@@ -177,15 +181,14 @@ class FramerWindow(Adw.ApplicationWindow):
 
     def _on_add_folder(self) -> None:
         chooser = Gtk.FileChooserNative.new(
+            "Add Folder",
             self,
-            None,
             Gtk.FileChooserAction.SELECT_FOLDER,
             "_Select",
             "_Cancel",
         )
-        chooser.set_title("Add Folder")
         chooser.connect("response", self._on_folder_response)
-        chooser.present()
+        chooser.show()  # FileChooserNative: show(), no present()
 
     def _on_folder_response(self, chooser, response) -> None:
         if response == Gtk.ResponseType.ACCEPT:
@@ -301,7 +304,7 @@ class FramerWindow(Adw.ApplicationWindow):
             aspect_den=b,
             portrait=self.view.orientation_button.get_active(),
             short_edge=int(self.view.short_edge_spin.get_value()),
-            frame_percent=float(self.view.frame_spinrow.get_value()),
+            frame_percent=float(self.view.frame_adjustment.get_value()),
         )
         self.job = BatchJob(
             items=self.view.items(),
@@ -460,7 +463,8 @@ class FramerWindow(Adw.ApplicationWindow):
         if self._settings_guard:
             return
         self.settings.set_double(
-            "frame-percent", round(float(self.view.frame_spinrow.get_value()), 2)
+            "frame-percent",
+            round(float(self.view.frame_adjustment.get_value()), 2),
         )
 
     def _on_thumbnail(self, item: QueueItem, texture) -> None:
@@ -514,15 +518,14 @@ class FramerWindow(Adw.ApplicationWindow):
 
     def _choose_output_dir(self, dir_row) -> None:
         chooser = Gtk.FileChooserNative.new(
+            "Choose Output Directory",
             self,
-            None,
             Gtk.FileChooserAction.SELECT_FOLDER,
             "_Select",
             "_Cancel",
         )
-        chooser.set_title("Choose Output Directory")
         chooser.connect("response", lambda c, r: self._on_output_dir_response(c, r, dir_row))
-        chooser.present()
+        chooser.show()  # FileChooserNative: show(), no present()
 
     def _on_output_dir_response(self, chooser, response, dir_row) -> None:
         if response == Gtk.ResponseType.ACCEPT:
