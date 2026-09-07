@@ -8,11 +8,20 @@
 > **REVISION:** v2 — user-configurable frame thickness: `Adw.SpinRow` (slider + numeric entry,
 > two decimal places, range 0.00–20.00%, default 5.00%), persisted via GSettings key
 > `frame-percent`; framing math parameterized (§4).
+>
+> **REVISION:** v3 — user-defined **output canvas**: aspect-ratio presets (5:4, 19:16, custom
+> configurable A:B), landscape/portrait flip, target short-edge resolution with live result
+> preview. Source content is contain-fitted (no cropping) inside the frame of the target
+> canvas. **Supersedes** the v1 rule "output identical to source" — output size/AR is now
+> user-chosen; content may be upscaled (LANCZOS) to fill the frame when the source is
+> smaller. Math verified by 200k-combo exhaustive random sweep during planning.
 
-App: **Framer** — a GNOME 47+/GTK4 + Libadwaita desktop app (PyGObject) that batch-processes
-images by adding a white frame occupying 5% of each dimension on each side, applied **inside**
-the original image boundaries (output is never enlarged, never cropped, same resolution and
-aspect ratio as the source), with maximum save quality and EXIF/ICC preservation.
+App: **Framer** — a GNOME 47+/GTK4 + Libadwaita desktop app (PyGObject) that batch-frames
+images onto a user-defined **target canvas**: aspect ratio (presets 5:4 / 19:16 / custom
+configurable A:B), landscape/portrait orientation, and short-edge resolution — with a white
+frame (thickness configurable 0.00–20.00%, default 5.00%, per side, **inside** the canvas)
+and the source content contain-fitted inside the frame without cropping, at maximum save
+quality with EXIF/ICC preservation.
 
 ---
 
@@ -54,7 +63,7 @@ framer/                              (repo root)
 ├── plan.md                          # this file
 ├── data/
 │   ├── com.funkyskywalker.Framer.desktop          # .desktop entry
-│   └── com.funkyskywalker.Framer.gschema.xml      # GSettings schema (output dir, suffix)
+│   └── com.funkyskywalker.Framer.gschema.xml      # GSettings schema (output dir, suffix, frame %, output canvas)
 └── framer/                          # Python package
     ├── __init__.py                  # __version__, APP_ID
     ├── __main__.py                  # `python -m framer`
@@ -134,33 +143,43 @@ thread still saturates a core while the GLib main loop keeps rendering at 60 fps
 
 ## 4. Phase 1 Proposal — 3. Framing Algorithm (exact math)
 
-Source: `W × H` pixels; user-configurable **frame thickness** `p` (percent of each image edge,
-default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame fraction
-`f = p/100` (default 0.05); content scale factor `s = 1 − 2f` (default 0.90). Interpretation:
-**the frame occupies `p`% of each image dimension on each side** (default 5%).
+Inputs: source image `W × H` (any aspect ratio); **output aspect ratio** `A:B` (presets
+5:4 / 19:16, or custom configurable integers 1–999); **orientation** landscape (`A:B` as
+entered) or portrait (flipped `B:A`); **short-edge resolution** `S` (pixels, 16–8192,
+default 1080); **frame thickness** `p` (percent of each canvas edge, default **5.00**,
+adjustable **0.00 – 20.00** with two decimal places). Frame fraction `f = p/100`, content
+scale `s = 1 − 2f` (default 0.90).
 
 | Step | Formula |
 |---|---|
-| 1. Canvas | New image exactly `W × H` in the **same mode** as source, filled **white** (mode map: `RGB→(255,255,255)`, `RGBA→(255,255,255,255)`, `LA→(255,255,255)`, `L→255`, `CMYK→(0,0,0,0)`, `I;16→65535`; `P`/`1`/`F`/`YCbCr` → converted to `RGBA`/`RGB` first) |
-| 2. Inner box | `W′ = max(1, round(s·W))`, `H′ = max(1, round(s·H))` |
-| 3. Inset | `L = (W − W′)//2`, `R = W − W′ − L` (likewise `T`, `B`) — remainder pixel goes to the right/bottom edge, content stays pixel-centered |
-| 4. Content | `content = source.resize((W′, H′), Image.Resampling.LANCZOS)` |
-| 5. Composite | `canvas.paste(content, (L, T))` → output is exactly `W × H` |
+| 1. Target canvas | Effective ratio `(Ae : Be)` = `(A, B)` landscape, `(B, A)` portrait. If `Ae ≥ Be`: `Hc = S`, `Wc = (2·S·Ae + Be) // (2·Be)`; else: `Wc = S`, `Hc = (2·S·Be + Ae) // (2·Ae)` — exact integer round-half-up on the long edge; the short edge is **exactly S**. Canvas is filled **white** (mode map: `RGB→(255,255,255)`, `RGBA→(255,255,255,255)`, `LA→(255,255,255)`, `L→255`, `CMYK→(0,0,0,0)`, `I;16→65535`; `P`/`1`/`F`/`YCbCr` → converted to `RGBA`/`RGB` first) |
+| 2. Frame (inside canvas) | `Wi = max(1, round(s·Wc))`, `Hi = max(1, round(s·Hc))` — the inner box |
+| 3. Frame inset | `L = (Wc − Wi)//2`, `R = Wc − Wi − L` (likewise `T`, `B`) — remainder pixel to right/bottom edge, box pixel-centered in the canvas |
+| 4. Content fit | `k = min(Wi/W, Hi/H)` — uniform scale, source AR preserved, **upscaling allowed** when source < inner box; `W′ = max(1, min(Wi, round(W·k)))`, `H′ = max(1, min(Hi, round(H·k)))` (independent rounding from `k` — avoids ratio-amplified clamps on extreme ratios; clamps make no-cropping airtight) |
+| 5. Composite | `content = source.resize((W′, H′), LANCZOS)`; paste at `ox = L + (Wi − W′)//2`, `oy = T + (Hi − H′)//2` (centered inside the frame) → output is exactly `Wc × Hc` |
 
-**Guarantees:**
-- **Never enlarges**: for the full allowed range `p ∈ [0, 20]` (`s ∈ [0.6, 1.0]`),
-  `round(s·W) ≤ W` holds for all `W ≥ 1` (verified by exhaustive random sweep); for tiny
-  images below roughly `0.5/(1−s)` px on an axis, that axis' frame degenerates to zero and
-  the content passes through unmodified — output is still exactly `W×H`.
-- **Aspect ratio exact**: the output canvas is literally the source's dimensions; the inner
-  box deviates from perfect `s` proportion by ≤ 1 px per axis, absorbed by asymmetric
-  padding — **zero cropping**, 100% of original content visible.
-- **Resolution identical**: same pixel dimensions; same DPI metadata if present.
+**Guarantees (verified by 200k-combo exhaustive random sweep during planning):**
+- **Exact target size**: the short edge is exactly `S`; the long edge realizes `A:B` within
+  round-half-up (≤ 0.5 px); the output is always exactly `Wc × Hc`, uniform for the whole batch.
+- **Frame strictly inside**: `Wi ≤ Wc`, `Hi ≤ Hc` for all `p ∈ [0, 20]` (`s ∈ [0.6, 1.0]`)
+  and all canvas sizes; `p=0` → inner == canvas (zero frame).
+- **Zero cropping (universal)**: `1 ≤ W′ ≤ Wi`, `1 ≤ H′ ≤ Hi` for **all** inputs — 100% of
+  the original content is always visible (the `max(1, …)` clamps make this airtight).
+- **Aspect ratio preserved**: the content box keeps the source ratio within ±0.5 px per axis
+  (relative deviation ≤ `0.5·(r + 1/r)/min(W′, H′)`, `r` = source ratio) whenever both true
+  scaled dimensions are ≥ 0.5 px; in the degenerate sub-pixel case (extreme-ratio strips
+  whose constrained axis scales below 0.5 px) that axis clamps to 1 px and the ratio
+  deviation is bounded by the 1-px quantum — fitting/no-cropping still airtight.
+- **Upscaling policy (v3 decision)**: the v1 "never enlarge" rule is **superseded** — the
+  output size is user-defined; when the source is smaller than the inner box, content is
+  upscaled with LANCZOS to fill it (best framed result at the chosen resolution).
 - **EXIF**: the raw EXIF byte blob from the source is re-injected **verbatim** on save
   (`im.info['exif']`). No tags are re-encoded, dropped, or "fixed". We deliberately do
   **not** apply `exif_transpose` to pixels, so an orientation-tagged file stays semantically
   identical (pixels pre-transposed, tag intact → renders exactly as the source did,
-  uniformly scaled).
+  uniformly scaled). Note: since v3 the canvas may differ from the source dimensions, so
+  pixel-dimension tags inside the preserved blob (e.g. `ExifImageWidth/Height`) are stale by
+  design — rendering is unaffected; documented as a README limitation.
 - **ICC**: `im.info['icc_profile']` bytes passed through verbatim where the format supports
   it (JPEG/PNG/WebP/TIFF).
 
@@ -185,17 +204,17 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 | Role | Widget | Notes |
 |---|---|---|
 | App object | `Adw.Application` (`com.funkyskywalker.Framer`) | `activate` + `open` signals → CLI args & drag-drop URIs both land in the same add-path |
-| Window | `Adw.ApplicationWindow` | default 1100×720; dark mode **automatic** (Adw follows system, zero code) |
+| Window | `Adw.ApplicationWindow` | default 1100×760, min width ~980 (the three bottom control rows must fit); dark mode **automatic** (Adw follows system, zero code) |
 | Header | `Adw.HeaderBar` | start: **Add Images** button (`list-add-symbolic`), **Add Folder** button (`folder-symbolic`); end: `Gtk.MenuButton` hamburger (`GMenu`: Clear finished, Clear all, Settings, About, Quit); center: `Adw.WindowTitle` "Framer" |
 | File pickers | `Adw.FileDialog` | `open_files()` with a `Gtk.FileFilter` of image suffixes; `open_folder()` for whole folders |
 | Status toasts | `Adw.ToastOverlay` + `Adw.Toast` | "N images added", "Batch finished X/Y", per-error HIGH-priority toasts |
 | Empty state | `Adw.StatusPage` | "No images yet" + primary action; swapped out when queue non-empty |
 | Queue list | `Adw.ToolbarView` → `Gtk.ScrolledWindow` → `Gtk.ListBox` | selection mode NONE; rows = `QueueRow` composites |
 | Queue row | custom `Gtk.Box` (HBox) | `Gtk.Image` thumbnail (48 px `Gdk.Texture`) · `Gtk.Label` filename (ellipsized) + dim-label (`W×H · JPEG · 2.3 MB`) · right side: `Adw.Spinner` (processing) / `Adw.StatusIcon` `emblem-ok-symbolic` (done) / `Adw.StatusIcon` `dialog-error-symbolic` (error) / dim label "Queued" |
-| Job bar | `Gtk.Box` (vertical) in `Adw.ToolbarView` bottom bar | **Controls row**: `Adw.SpinRow` "Frame thickness" (below, `hexpand`) + **Start Framing** `Gtk.Button` (`suggested-action`, `media-playback-start-symbolic`) + **Cancel** button (`process-stop-symbolic`). **Progress row**: `Adw.Spinner` (visible while running) + status label ("3 of 12 — beach.jpg", `hexpand`) + `Gtk.ProgressBar` (`set_show_text(True)`, `set_fraction`) |
-| Frame thickness | `Adw.SpinRow` (native Libadwaita slider + numeric entry composite, Adw ≥ 1.5 — we have 1.9) | `Gtk.Adjustment(5.00, 0.00, 20.00, step 0.01, page 0.1)`, `set_digits(2)`, `add_suffix("%")`, title "Frame thickness", subtitle "White frame on each side, % of the image edge"; bound to the `frame-percent` GSettings key (load on startup, persist on change); **insensitive while a batch runs** — the value is snapshotted at job start |
+| Bottom controls | `Gtk.Box` (vertical, 3 rows) in `Adw.ToolbarView` bottom bar | **Output row**: dim "Output" label + aspect preset `Gtk.ComboBox` (`new_from_strings`: "5:4", "19:16", "Custom") + custom A:B pair (`Gtk.Revealer` with two integer `Gtk.SpinButton` 1–999, shown only on "Custom") + orientation `Gtk.ToggleButton` (label flips "Landscape" ↔ "Portrait") + dim "Short edge" label + short-edge `Gtk.SpinButton` (16–8192 px, default 1080) + **result preview** dim `Gtk.Label` ("Result: 1350 × 1080", live). **Frame row**: `Adw.SpinRow` "Frame thickness" (below, `hexpand`) + **Start Framing** `Gtk.Button` (`suggested-action`, `media-playback-start-symbolic`) + **Cancel** button (`process-stop-symbolic`). **Progress row**: `Adw.Spinner` (visible while running) + status label ("3 of 12 — beach.jpg", `hexpand`) + `Gtk.ProgressBar` (`set_show_text(True)`, `set_fraction`) |
+| Frame thickness | `Adw.SpinRow` (native Libadwaita slider + numeric entry composite, Adw ≥ 1.5 — we have 1.9) | `Gtk.Adjustment(5.00, 0.00, 20.00, step 0.01, page 0.1)`, `set_digits(2)`, `add_suffix("%")`, title "Frame thickness", subtitle "White frame on each side, % of the image edge"; bound to the `frame-percent` GSettings key (load on startup, persist on change); **insensitive while a batch runs** (together with the whole output row) — the complete `OutputSpec` is snapshotted at job start |
 | Drag & drop | `widget.set_drag_dest(Gdk.Uri)` on the window | `drag-data-received` → `GLib.Value.get_string()` → URI filter by extension + magic probe |
-| Settings | `Gio.Settings` (schema `com.funkyskywalker.Framer`) | keys: `output-directory` ("" = next to source), `suffix` (default `_framed`), `frame-percent` (double, default 5.00, range 0.00–20.00); graceful in-memory fallback if schema not installed (wrap in try/except, hardcoded defaults) |
+| Settings | `Gio.Settings` (schema `com.funkyskywalker.Framer`) | keys: `output-directory` ("" = next to source), `suffix` (default `_framed`), `frame-percent` (double, default 5.00, range 0.00–20.00), `aspect-preset` (string "5:4" | "19:16" | "custom", default "5:4"), `aspect-num` / `aspect-den` (int, default 3/2, range 1–999), `orientation-portrait` (bool, default false), `short-edge` (int, default 1080, range 16–8192); graceful in-memory fallback if schema not installed (wrap in try/except, hardcoded defaults) |
 | About | `Adw.AboutWindow` | name, version, MIT license, developer |
 | Accelerators | `app.set_accels_for_action` | `Ctrl+O` files · `Ctrl+Shift+O` folder · `Ctrl+Return` start · `Ctrl+.` cancel (GNOME stop convention) · `Ctrl+W` close |
 
@@ -218,6 +237,8 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 - AVIF / JXL / HEIC: no Pillow plugins on this system → file rejected with a per-row error.
 - 16-bit / palette / CMYK sources: handled via the mode map in §4 (lossless where the format
   is lossless).
+- Preserved EXIF blobs keep their original pixel-dimension tags, which are stale when the
+  target canvas differs from the source size (rendering unaffected).
 
 ---
 
@@ -261,9 +282,12 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 - **`requirements.txt`**: `PyGObject>=3.50` (with a comment: provided by system `python3-gi`,
   not pip-installable here), `Pillow>=10.0`.
 - **`data/com.funkyskywalker.Framer.gschema.xml`**: schema id `com.funkyskywalker.Framer`,
-  path `/com/funkyskywalker/Framer/`; string key `output-directory` (default `""`), string key
-  `suffix` (default `"_framed"`), double key `frame-percent` (default 5.0, range 0.0–20.0,
-  "Frame thickness in percent of each image edge"), all with summaries/descriptions.
+  path `/com/funkyskywalker/Framer/`; keys: `output-directory` (string, default `""`),
+  `suffix` (string, default `"_framed"`), `frame-percent` (double, default 5.0, range 0.0–20.0),
+  `aspect-preset` (string, default `"5:4"`, values "5:4"/"19:16"/"custom"), `aspect-num`
+  (int, default 3, range 1–999), `aspect-den` (int, default 2, range 1–999),
+  `orientation-portrait` (bool, default false), `short-edge` (int, default 1080,
+  range 16–8192) — all with summaries/descriptions.
 - **`data/com.funkyskywalker.Framer.desktop`**: `Type=Application`, `Name=Framer`,
   `Exec=python3 {install-path}/main.py %F`, `MimeType=image/jpeg;image/png;image/webp;image/tiff;image/bmp;image/x-ms-bmp;image/gif;image/apng;`, `Icon=image-x-generic`,
   `Categories=Graphics;`.
@@ -271,19 +295,27 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 - **`core/models.py`** (no GTK): `class ItemState(str, Enum)` — `QUEUED, PROCESSING, DONE,
   ERROR, CANCELLED`. `@dataclass QueueItem` — `path: Path`, `uri: str`, `width/height: int|None`,
   `format: str|None`, `size_bytes: int|None`, `state: ItemState`, `fraction: float`,
-  `output_path: Path|None`, `error: str|None`. `@dataclass JobSummary` — `total, done,
-  failed, cancelled`.
+  `output_path: Path|None`, `error: str|None`. `@dataclass(frozen=True) OutputSpec` —
+  `aspect_num: int, aspect_den: int, portrait: bool, short_edge: int, frame_percent: float`,
+  `__post_init__` clamps (aspect 1–999, short_edge 16–8192, percent 0–20);
+  `@dataclass JobSummary` — `total, done, failed, cancelled`.
 - **`core/framing.py`** (no GTK): constants `FRAME_PERCENT_DEFAULT = 5.0`,
-  `FRAME_PERCENT_MIN = 0.0`, `FRAME_PERCENT_MAX = 20.0`; `def frame_geometry(w, h, percent) ->
-  Geometry` (dataclass with `canvas_w, canvas_h, inner_w, inner_h, pad_l, pad_r, pad_t, pad_b`)
-  implementing the §4 math exactly (clamp `percent` to `[0, 20]`, pure int, unit-testable); `def white_for_mode(mode) ->
-  tuple|None` (mode map from §4, returns `None` for modes that must be converted first);
-  `def compute_working_mode(mode) -> str` (identity or `RGBA`/`RGB` target).
+  `FRAME_PERCENT_MIN = 0.0`, `FRAME_PERCENT_MAX = 20.0`, `SHORT_EDGE_MIN = 16`,
+  `SHORT_EDGE_MAX = 8192`, `SHORT_EDGE_DEFAULT = 1080`;
+  `def target_canvas(a, b, portrait, short_edge) -> tuple[int, int]` (`(w, h)`; §4 step 1,
+  exact integer round-half-up, clamps inputs); `def frame_geometry(canvas_w, canvas_h,
+  percent) -> FrameGeometry` (dataclass `inner_w, inner_h, pad_l, pad_r, pad_t, pad_b`; §4
+  steps 2–3; clamps `percent` to `[0, 20]`); `def content_fit(src_w, src_h, inner_w,
+  inner_h) -> ContentFit` (dataclass `w2, h2, dx, dy` — content size + offset **relative to
+  the inner box**; §4 step 4; the compositor adds the frame padding: `ox = pad_l + dx`);
+  `def white_for_mode(mode) -> tuple|None` (mode map from §4, `None` for modes that must be
+  converted first); `def compute_working_mode(mode) -> str` (identity or `RGBA`/`RGB` target).
 - **`core/image_io.py`** (no GTK): `def probe(path) -> (w, h, format, size)` (fast open,
   no full decode — `Image.open` + `im.size`/`im.format`/`im.info.get('n_frames',1)`);
-  `def frame_image(src_path, dst_path, percent=5.0, progress_cb=None) -> None` — full pipeline (`percent` clamped via `frame_geometry`): open,
-  build white canvas, per-frame resize+paste (multi-frame support: `n_frames > 1` → iterate
-  frames, collect durations/disposal/loop from source `info`, `save_all=True`), `progress_cb
+  `def frame_image(src_path, dst_path, spec: OutputSpec, progress_cb=None) -> None` — full
+  pipeline: open, `target_canvas` + white canvas, `frame_geometry` + `content_fit` per frame
+  (multi-frame support: `n_frames > 1` → every frame fit to the **same** canvas/inner box,
+  collect durations/disposal/loop from source `info`, `save_all=True`), `progress_cb
   (stage_fraction)` called at 0.33/0.66/1.0; save with the per-format param table from §4
   (JPEG q100 subsampling=0 + exif + icc; PNG RGBA for palette sources; WebP q100 method=6;
   TIFF reuse tag-259 compression map else LZW; GIF/APNG per-frame). EXIF via
@@ -302,9 +334,9 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
   `(int, boolean, string)` (index, ok, error-message), `job-finished` `(int, int, int, int)`
   (total, done, failed, cancelled). Declare with `__gtype_name__` + `GObject.signal_new`.
 - **`workers/batch_worker.py`**: `class BatchJob` — ctor `(items: list[QueueItem], bus:
-  SignalBus, suffix, output_dir, frame_percent)`; `frame_percent` is snapshotted from the UI at
-  job start (the `SpinRow` is insensitive while running, so it cannot change mid-batch) and passed
-  to `frame_image`; internal `queue.Queue` (worker→main) + `threading.Event`
+  SignalBus, suffix, output_dir, spec: OutputSpec)`; `spec` is snapshotted from the UI at job
+  start (all output/frame controls are insensitive while running, so nothing can change
+  mid-batch) and passed to `frame_image`; internal `queue.Queue` (worker→main) + `threading.Event`
   cancel flag + `threading.Thread`; `start()`, `cancel()`, `is_running()`; worker loop:
   per item — probe geometry/output resolution, call `frame_image`, update the `QueueItem`
   in place (thread-safe: only worker writes, main reads via events), push events with
@@ -339,17 +371,25 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
   empty state (icon `image-x-generic`, title "No images yet", description with
   add/drop instructions, primary "Add Images" button → `add-files` action), visible only
   when queue empty; (b) `Gtk.ScrolledWindow` + `Gtk.ListBox` (selection NONE) of
-  `QueueRow`s; (c) bottom job bar — a vertical `Gtk.Box`: **controls row** with
-  `Adw.SpinRow` (`Gtk.Adjustment.new(5.0, 0.0, 20.0, 0.01, 0.1, 0.0)`, `set_digits(2)`,
-  `add_suffix("%")`, `set_title("Frame thickness")`,
+  `QueueRow`s; (c) bottom controls — a vertical `Gtk.Box` with 3 rows:
+  **output row** — dim "Output" `Gtk.Label` + `Gtk.ComboBox.new_from_strings([b"5:4", b"19:16",
+  b"Custom"])` + `Gtk.Revealer` containing a custom A/B `Gtk.SpinButton.new_for_range(1, 999, 1)`
+  pair with a ":" label (revealed only when combo index == 2) + orientation `Gtk.ToggleButton`
+  (label "Landscape" ↔ "Portrait", tooltip "Flip orientation") + dim "Short edge" label +
+  `Gtk.SpinButton.new_for_range(16, 8192, 1)` (`set_page_increment(100)`, tooltip "Short edge
+  in pixels") + dim result-preview `Gtk.Label` ("Result: 1350 × 1080");
+  **frame row** — `Adw.SpinRow` (`Gtk.Adjustment.new(5.0, 0.0, 20.0, 0.01, 0.1, 0.0)`,
+  `set_digits(2)`, `add_suffix("%")`, `set_title("Frame thickness")`,
   `set_subtitle("White frame on each side, % of the image edge")`, `hexpand`) + Start
   button (`suggested-action`, `Adw.ButtonContent` `media-playback-start-symbolic` "Start
   Framing") + Cancel button (`process-stop-symbolic` "Cancel", insensitive unless running);
-  **progress row** with `Adw.Spinner` + status `Gtk.Label` (`hexpand`) + `Gtk.ProgressBar`
+  **progress row** — `Adw.Spinner` + status `Gtk.Label` (`hexpand`) + `Gtk.ProgressBar`
   (`set_show_text(True)`). API: `add_item(QueueItem)`, `update_item(index, fraction, state)`,
-  `set_running(bool, current_label)` (also toggles `SpinRow` sensitivity),
-  `set_progress(done, total, fraction)`, `clear()`, `clear_finished()`, `items()`,
-  `get_frame_row() -> Adw.SpinRow` (window binds it to GSettings).
+  `set_running(bool, current_label)` (also toggles sensitivity of **all** output/frame
+  controls), `set_progress(done, total, fraction)`, `clear()`, `clear_finished()`, `items()`;
+  getters for window binding: `get_aspect_combo()`, `get_custom_revealer()`,
+  `get_orientation_button()`, `get_short_edge_spin()`, `get_frame_row()`,
+  `set_result_label(w, h)` ("Result: W × H").
 - **`window.py`**: `class FramerWindow(Adw.ApplicationWindow)` — builds
   `Adw.ToastOverlay` → `Adw.ToolbarView` (top: `Adw.HeaderBar`; content: `QueueView`;
   bottom bar: job bar lives inside QueueView); wires `Adw.FileDialog` (files + folder,
@@ -359,14 +399,21 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
   `SignalBus` signals to `QueueView` updates + toasts (finished: summary toast, HIGH
   priority if any failures); implements the add-files/add-folder/start/cancel/clear/
   clear-finished/about/settings handlers; `add_paths(paths: list[Gio.File])` shared by
-  dialog/drop/CLI-`open`; binds `QueueView.get_frame_row()`: initial value from the
-  `frame-percent` setting, writes back (clamped to [0, 20]) on `adjustment::value-changed`;
-  starts `BatchJob` with `frame_percent = spinrow.get_value()`.
+  dialog/drop/CLI-`open`; binds all output/frame controls to GSettings (initial values from
+  settings, write back on change, clamped): aspect combo ↔ `aspect-preset`, custom A/B ↔
+  `aspect-num`/`aspect-den` (the `Gtk.Revealer` tracks the combo), orientation toggle ↔
+  `orientation-portrait`, short edge ↔ `short-edge`, frame `SpinRow` ↔ `frame-percent`;
+  a single `refresh_output()` recomputes the preview via `core.target_canvas` and calls
+  `set_result_label` on any control change; on Start builds
+  `OutputSpec(aspect_num, aspect_den, portrait, short_edge, frame_percent)` from the live
+  controls and starts the `BatchJob` with that snapshot.
 - **`app.py`**: `class FramerApplication(Adw.Application)` — `__init__(APP_ID,
   default_flags)`, `app.set_application_icon_name("image-x-generic")`; GSettings
   service with graceful fallback (try `Gio.Settings.new("com.funkyskywalker.Framer")`,
   except `GLib.Error` → in-memory defaults `{"output-directory": "", "suffix": "_framed",
-  "frame-percent": 5.0}` with the same get/set interface); `do_activate` creates the window; `do_open(files, n)`
+  "frame-percent": 5.0, "aspect-preset": "5:4", "aspect-num": 3, "aspect-den": 2,
+  "orientation-portrait": False, "short-edge": 1080}` with the same get/set interface);
+  `do_activate` creates the window; `do_open(files, n)`
   reuses the existing window (or creates one) and calls `add_paths`; `do_startup` registers
   accelerators.
 - **`framer/__main__.py`** and **`main.py`**: both — `gi.require_version('Gtk','4.0')`,
@@ -384,18 +431,22 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
   schema install step (optional, for GSettings persistence):
   `install -d ~/.local/share/glib-2.0/schemas && cp data/com.funkyskywalker.Framer.gschema.xml
   ~/.local/share/glib-2.0/schemas/ && glib-compile-schemas ~/.local/share/glib-2.0/schemas`;
-  usage (add images/folder, drag & drop, frame-thickness control — slider + numeric entry,
-  0.00–20.00%, two decimals, default 5.00, persisted across sessions — accelerators table),
-  output naming rules
-  (`<stem>_framed.<ext>`, collision suffixing), framing math summary (5% per side, 0.90
-  content scale, never enlarged, EXIF/ICC verbatim), per-format save-quality table,
-  limitations (no AVIF/JXL/HEIC on this system; tiny images <5 px), license MIT.
+  usage (add images/folder, drag & drop, output controls — aspect presets 5:4/19:16/Custom
+  with A:B entries, landscape/portrait flip, short-edge resolution with live "Result: W × H"
+  preview — frame-thickness control, slider + numeric entry, 0.00–20.00%, two decimals,
+  default 5.00, all persisted across sessions — accelerators table), output naming rules
+  (`<stem>_framed.<ext>`, collision suffixing), framing model summary (target canvas from
+  AR + orientation + short edge; frame strictly inside; content contain-fit, no cropping,
+  may upscale to fill; EXIF/ICC verbatim), per-format save-quality table,
+  limitations (no AVIF/JXL/HEIC on this system; output size/AR is user-defined and no longer
+  tied to the source; stale EXIF pixel-dimension tags when canvas ≠ source size), license MIT.
 - **`AGENTS.md`**: project rules for agentic work — layering law (`core/` must never import
   GTK/GObject; all GTK on the main thread only via the Dispatcher; worker thread never
   calls GLib UI APIs), how to run (system python3 or `--system-site-packages` venv),
   how to smoke-test headless (see 6.3), file map, do-not-break list (EXIF/ICC verbatim,
-  never enlarge, per-item error isolation, single writer thread, frame percent clamped to
-  [0, 20] in core AND UI with a snapshot at job start), where to add formats
+  frame strictly inside canvas, content never cropped, output size derived ONLY from
+  `OutputSpec` via `core.framing`, per-item error isolation, single writer thread,
+  `OutputSpec` snapshotted at job start and clamped in core AND UI), where to add formats
   (`utils/paths.py` extensions + `core/image_io.py` save table), commit style
   (author `picode <roman.mikula.picode@funkyskywalker.at>` per gitea skill conventions
   if pushing to Gitea).
@@ -405,19 +456,25 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 1. `python3 -c "import gi; gi.require_version('Gtk','4.0'); gi.require_version('Adw','1');
    import framer.app; print('import OK')"` — clean import, no warnings.
 2. Headless math test (no display needed):
-   - `frame_geometry(2000, 1333, 5.0)` → inner `1800×1200` (`round(0.9*1333)=1200`),
-     canvas exactly `2000×1333`, pads sum exactly to `canvas − inner`.
-   - Frame-thickness sweep: for `p` in {0.00, 2.50, 5.00, 7.37, 12.00, 20.00} × 50 random
-     sizes: never enlarges (`inner ≤ canvas` on both axes), `p=0` → inner == canvas (zero
-     frame), `p=20` → inner == `round(0.6·dim)`; out-of-range inputs (e.g. 30, −2) are
-     clamped and never raise.
-   - Synthetic end-to-end: create `Image.new('RGB', (640, 480), (10, 20, 30))`, save JPEG
-     with an `exif` blob + `icc_profile`, run `frame_image`, reopen output:
-     assert size == (640, 480), `info['exif']` bytes identical to source's,
-     corner pixel of output == white (255,255,255), center pixel unchanged hue.
-   - RGBA PNG with transparency: output stays PNG, size identical, corner white with
-     alpha 255.
-   - GIF 2-frame: output GIF has `n_frames == 2`, durations preserved.
+   - `target_canvas(5, 4, False, 1080)` → (1350, 1080); `target_canvas(19, 16, False, 1080)`
+     → (1283, 1080); `target_canvas(5, 4, True, 1080)` → (1080, 1350);
+     `target_canvas(4, 5, False, 1080)` → (1080, 1350) (custom ratio < 1 in landscape);
+     for 50 random (A, B, portrait, S) combos the short edge is exactly S.
+   - `frame_geometry(1350, 1080, 5.0)` → inner (1215, 972), pads (67, 68, 54, 54);
+     sweep `p` in {0.00, 2.50, 5.00, 7.37, 12.00, 20.00, 30.00, −2.00} × 50 random canvas
+     sizes: `inner ≤ canvas` both axes, `p=0` → inner == canvas, pads sum exactly to
+     `canvas − inner`; out-of-range `p` clamped, never raises.
+   - `content_fit` sweep (100k random source/canvas/percent combos): always
+     `1 ≤ w2 ≤ inner_w`, `1 ≤ h2 ≤ inner_h` (no cropping); when both true scaled dims
+     ≥ 0.5 px, ratio deviation ≤ `0.5·(r+1/r)/min(w2, h2)`; upscale case:
+     800×600 into 1215×972 inner → (1215, 911).
+   - Synthetic end-to-end: `Image.new('RGB', (4032, 3024), (10, 20, 30))` saved as JPEG
+     with an `exif` blob + `icc_profile`; run `frame_image` with
+     `OutputSpec(5, 4, False, 1080, 5.0)`: output size == (1350, 1080), `info['exif']`
+     bytes identical, corner pixel white, content-center pixel matches the source center
+     hue (LANCZOS tolerance); portrait spec → (1080, 1350).
+   - RGBA PNG with transparency: output stays PNG at canvas size, corner white alpha 255.
+   - GIF 2-frame: output GIF `n_frames == 2`, durations preserved, canvas size.
 3. `grep -rn "TODO\|FIXME\|XXX\|placeholder\|# later" framer/ main.py` → no hits.
 4. `grep -rln "gi.repository\|import gi" framer/core/` → no hits (pure core).
 5. UI launch (requires display; user will verify): `.venv/bin/python main.py` opens the
@@ -430,8 +487,9 @@ default **5.00**, adjustable **0.00 – 20.00** with two decimal places); frame 
 - Multi-file structure from §2 is mandatory — no single-file implementations, no
   placeholders, no `# TODO`.
 - All code must be complete and production-grade.
-- All geometry math goes through `core.framing.frame_geometry` (single source of truth for
-  the user-configurable frame thickness); no hardcoded `0.05` anywhere downstream.
+- All geometry math goes through `core.framing` (`target_canvas` + `frame_geometry` +
+  `content_fit`) — the single source of truth for the user-configurable output canvas and
+  frame; no hardcoded aspect ratios, `0.05`, or `1080` anywhere downstream.
 - Respect the two-phase protocol: do not start until the user explicitly approves.
 - If the PyCharm MCP servers happen to be up in the new session, they may be used for
   project-wide symbols/diagnostics, but native tools are the fallback (they are down by
