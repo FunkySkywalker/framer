@@ -13,7 +13,6 @@ from typing import Optional
 from ..core.image_io import ProcessingCancelled, frame_image
 from ..core.models import ItemState, OutputSpec, QueueItem
 from ..core.output import resolve_output
-from .signals import SignalBus
 
 
 class BatchJob:
@@ -27,7 +26,7 @@ class BatchJob:
     def __init__(
         self,
         items: list[QueueItem],
-        bus: SignalBus,
+        bus: object,  # unused: events flow via event_queue; any frontend bus
         suffix: str,
         output_dir: str,
         spec: OutputSpec,
