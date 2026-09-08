@@ -50,7 +50,8 @@ class Controls(QWidget):
     ``short_edge_changed``, ``frame_percent_changed(float)``.
     """
 
-    aspect_changed = Signal()
+    aspect_changed = Signal()  # combo selection changed
+    custom_aspect_changed = Signal()  # custom A:B spin changed
     orientation_changed = Signal()
     short_edge_changed = Signal()
     frame_percent_changed = Signal(float)
@@ -105,7 +106,9 @@ class Controls(QWidget):
         self.orientation_button = QPushButton("Landscape", row)
         self.orientation_button.setCheckable(True)
         self.orientation_button.setToolTip("Flip orientation")
-        self.orientation_button.clicked.connect(self._on_orientation_toggled)
+        # toggled (not clicked): programmatic setChecked at startup must
+        # flip the label and refresh the result too
+        self.orientation_button.toggled.connect(self._on_orientation_toggled)
         box.addWidget(self.orientation_button)
 
         se_label = QLabel("Short edge", row)
@@ -223,7 +226,7 @@ class Controls(QWidget):
 
     def _on_custom_aspect_changed(self, _value: int) -> None:
         self._refresh_result()
-        self.aspect_changed.emit()
+        self.custom_aspect_changed.emit()
 
     def _on_short_edge_changed(self, _value: int) -> None:
         self._refresh_result()
@@ -324,6 +327,10 @@ class Controls(QWidget):
 
     def set_result_label(self, w: int, h: int) -> None:
         self.result_label.setText(f"Result: {w} × {h}")
+
+    def refresh_result(self) -> None:
+        """Public alias of the live result refresh (window startup sync)."""
+        self._refresh_result()
 
     def _refresh_result(self) -> None:
         num, den = self.aspect_ratio()

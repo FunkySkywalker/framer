@@ -20,7 +20,7 @@
 | 3 | Queue UI (empty state + rows) | ✅ Done | 22/22 checks pass; both screenshots reviewed |
 | 4 | Bottom control bar (output / frame / progress rows) | ✅ Done | 24/24 checks pass; idle + running screenshots reviewed |
 | 5 | Window chrome: toolbar, menu, accelerators, dialogs, DnD, toasts | ✅ Done | 25/25 checks pass; 3 screenshots reviewed |
-| 6 | Settings persistence, settings dialog, full wiring | ⬜ Pending | |
+| 6 | Settings persistence, settings dialog, full wiring | ✅ Done | 35/35 checks pass; screenshot reviewed |
 | 7 | Theming — cross-DE/OS appearance (GNOME/KDE/Windows) | ⬜ Pending | |
 | 8 | Cutover, GTK removal, docs | ⬜ Pending | |
 
@@ -153,3 +153,38 @@
   window (toolbar + empty state + controls, Start disabled), full window
   (4 real thumbnails, meta lines, toast bottom-right), menu (exact GTK
   items).
+
+### ✅ Phase 6: Settings persistence, settings dialog, full batch wiring
+- **Finished:** 2026-09-08T11:50:00+00:00
+- **Commits:** `xxxxx` — Phase 6: settings service, dialog, full batch wiring
+- **Notes:** `framer/qt/settings.py` (Settings over QSettings INI — same 8
+  key names + defaults as the GSettings fallback; identity
+  com.funkyskywalker/Framer → $XDG_CONFIG_HOME/com.funkyskywalker/Framer.conf;
+  reads normalize via str() so INI text and native types both parse),
+  `framer/qt/dialogs.py` (SettingsDialog(QDialog): Output group — directory
+  row with "Next to source images"/path subtitle + Choose… non-native
+  folder picker, suffix entry live-writing settings, OK/Cancel; About stays
+  in the window), `framer/qt/window.py` full wiring: _apply_settings with
+  _settings_guard (initial sets don't re-write), 5 change handlers writing
+  settings, _on_start (OutputSpec snapshot → BatchJob → dispatcher.attach →
+  set_running), _on_cancel, item_started/progress/finished + job_finished
+  handlers with the exact GTK progress math (done/total, current-filename
+  status), per-item warning/error toasts, success vs error-style summary
+  toast, Clear buttons re-enabled on finish; `framer/qt/controls.py`:
+  aspect_changed (combo) / custom_aspect_changed (spins) split so the
+  window can write the right keys, public refresh_result().
+  **Qt pitfalls found:** (1) QButtonBox REMOVED from PySide6 6.11 — plain
+  QPushButton row; (2) QCheckBox.clicked fires only for user clicks —
+  programmatic setChecked needs `toggled` (startup label flip was broken
+  by this); (3) QSettings.value() returns mixed types — normalize via
+  str() before int/float/bool parse (also ty-clean without ignores).
+  Verification `scripts/verify_settings_batch.py`: 35/35 pass — sandboxed
+  XDG_CONFIG_HOME; run 1: 3 EXIF+ICC JPEGs, changed settings (suffix x,
+  frame 7.5, custom 4:3, portrait, 720) → job_finished(3,3,0,0) →
+  <stem>x.jpg outputs 720×960, EXIF + ICC bytes byte-identical, white
+  corner; run 2 (new window, same config): all 8 settings restored into
+  controls; run 3: cancel after first item → job_finished(3,1,0,2) +
+  "Batch finished: 1 framed, 2 cancelled" high-priority toast; settings
+  dialog suffix/subtitle wiring. ty clean. Screenshot reviewed:
+  phase6-batch-done.png (3 ok rows, Result 720 × 960, 7.50 % slider,
+  3 of 3 full bar, success toast bottom-right).

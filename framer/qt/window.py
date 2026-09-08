@@ -32,14 +32,17 @@ from PySide6.QtWidgets import (
 
 from .. import __version__
 from ..core.image_io import probe
-from ..core.models import QueueItem
+from ..core.models import ItemState, QueueItem
 from ..core.scanner import scan_folder
 from ..utils.paths import IMAGE_EXTENSIONS, format_meta, is_image_file
 from .controls import Controls
+from .dialogs import SettingsDialog
 from .dispatcher import Dispatcher
 from .queue_view import QueueView
-from .toasts import ToastHost
+from .settings import Settings
+from .toasts import ToastHost, error as toast_error, success as toast_success
 from .widgets import icon
+from ..workers.batch_worker import BatchJob
 
 #: name → accelerator (single Handlers dict, like the GTK Actions class)
 ACCELERATORS: dict[str, str] = {
@@ -64,9 +67,12 @@ class FramerWindow(QMainWindow):
         self.setMinimumSize(980, 480)
 
         self.dispatcher = Dispatcher()
-        self.job = None  # Phase 6: BatchJob
+        self.job: Optional[BatchJob] = None
+        self._done_count = 0
         self._seen: set[Path] = set()
         self._about_box: Optional[QMessageBox] = None
+        self._settings_dialog: Optional[SettingsDialog] = None
+        self._settings_guard = False
 
         # content: queue view + control bar, wrapped in the toast host
         self.view = QueueView()
@@ -102,7 +108,26 @@ class FramerWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         self.dispatcher.start()
-        self.dispatcher.bus.thumbnail.connect(self.view.set_row_thumbnail)
+        bus = self.dispatcher.bus
+        bus.thumbnail.connect(self.view.set_row_thumbnail)
+        bus.item_started.connect(self._on_item_started)
+        bus.item_progress.connect(self._on_item_progress)
+        bus.item_finished.connect(self._on_item_finished)
+        bus.job_finished.connect(self._on_job_finished)
+
+        # settings → controls (initial values; the guard keeps the initial
+        # sets from re-writing the settings file)
+        self.settings = Settings()
+        self._apply_settings()
+        self.controls.aspect_changed.connect(self._on_aspect_changed)
+        self.controls.custom_aspect_changed.connect(
+            self._on_custom_aspect_changed
+        )
+        self.controls.orientation_changed.connect(self._on_orientation_changed)
+        self.controls.short_edge_changed.connect(self._on_short_edge_changed)
+        self.controls.frame_percent_changed.connect(self._on_frame_changed)
+        self.controls.start_button.clicked.connect(self._on_start)
+        self.controls.cancel_button.clicked.connect(self._on_cancel)
 
         if files:
             self.add_paths(list(files))
@@ -270,7 +295,7 @@ class FramerWindow(QMainWindow):
             )
         self._sync_start_enabled()
 
-    # -- batch lifecycle (Phase 6 fills start/cancel + event handlers) --------
+    # -- batch lifecycle ------------------------------------------------------
 
     def _running(self) -> bool:
         return self.job is not None and self.job.is_running()
@@ -282,10 +307,83 @@ class FramerWindow(QMainWindow):
             self.controls.set_start_enabled(bool(self.view.rows))
 
     def _on_start(self) -> None:
-        """Start the batch — Phase 6 (OutputSpec snapshot + BatchJob)."""
+        if self._running() or not self.view.rows:
+            return
+        self.job = BatchJob(
+            items=self.view.items(),
+            bus=self.dispatcher.bus,
+            suffix=self.settings.get_string("suffix"),
+            output_dir=self.settings.get_string("output-directory"),
+            spec=self.controls.output_spec(),
+        )
+        self.dispatcher.attach(self.job.event_queue)
+        self._done_count = 0
+        self.job.start()
+        self.controls.set_running(True)
+        self._sync_clear_enabled(False)
+        self._sync_start_enabled()
 
     def _on_cancel(self) -> None:
-        """Cancel the batch — Phase 6."""
+        job = self.job
+        if job is None or not job.is_running():
+            return
+        job.cancel()
+        self.host.toast("Cancelling after the current file…")
+
+    def _on_item_started(self, index: int) -> None:
+        if index >= len(self.view.rows):
+            return
+        item = self.view.rows[index].item
+        self.view.update_item(index, 0.0, ItemState.PROCESSING)
+        total = len(self.view.rows)
+        frac = self._done_count / total if total else 0.0
+        self.controls.set_progress(self._done_count, total, frac, item.path.name)
+
+    def _on_item_progress(self, index: int, fraction: float) -> None:
+        if index >= len(self.view.rows):
+            return
+        item = self.view.rows[index].item
+        self.view.update_item(index, fraction, ItemState.PROCESSING)
+        total = len(self.view.rows)
+        frac = (self._done_count + fraction) / total if total else 0.0
+        self.controls.set_progress(self._done_count, total, frac, item.path.name)
+
+    def _on_item_finished(self, index: int, ok: bool, error_message: str) -> None:
+        if index >= len(self.view.rows):
+            return
+        row = self.view.rows[index]
+        self.view.update_item(index, 1.0, row.item.state)
+        if row.item.state is ItemState.DONE:
+            self._done_count += 1
+            for warning in row.item.warnings:
+                self.host.toast(
+                    f"{row.item.path.name}: {warning}", "normal", 5.0
+                )
+        elif row.item.state is ItemState.ERROR:
+            toast_error(
+                self.host, f"{row.item.path.name}: {error_message or 'failed'}"
+            )
+
+    def _on_job_finished(
+        self, total: int, done: int, failed: int, cancelled: int
+    ) -> None:
+        self._done_count = 0
+        self.controls.set_running(False)
+        self.controls.set_progress(total, total, 1.0)
+        self._sync_clear_enabled(True)
+        self._sync_start_enabled()
+        parts = [f"{done} framed"]
+        if failed:
+            parts.append(f"{failed} failed")
+        if cancelled:
+            parts.append(f"{cancelled} cancelled")
+        if failed or cancelled:
+            toast_error(self.host, "Batch finished: " + ", ".join(parts))
+        else:
+            toast_success(
+                self.host,
+                f"Batch finished — {total} image{'s' if total != 1 else ''} framed",
+            )
 
     # -- queue actions ------------------------------------------------------------
 
@@ -312,10 +410,70 @@ class FramerWindow(QMainWindow):
             self.controls.set_start_enabled(False)
         self._sync_start_enabled()
 
-    # -- settings / about ---------------------------------------------------------
+    # -- settings ---------------------------------------------------------------
+
+    def _apply_settings(self) -> None:
+        """Settings → controls (startup). The guard suppresses the
+        settings re-write that the change handlers would perform."""
+        self._settings_guard = True
+        preset = self.settings.get_string("aspect-preset")
+        combo_text = "Custom" if preset == "custom" else preset
+        if combo_text not in ("5:4", "19:16", "Custom"):
+            combo_text = "Custom"
+        self.controls.aspect_combo.setCurrentText(combo_text)
+        self.controls.aspect_num_spin.setValue(self.settings.get_int("aspect-num"))
+        self.controls.aspect_den_spin.setValue(self.settings.get_int("aspect-den"))
+        self.controls.orientation_button.setChecked(
+            self.settings.get_boolean("orientation-portrait")
+        )
+        # setChecked fires the toggle handler (label flip + refresh) already
+        self.controls.short_edge_spin.setValue(self.settings.get_int("short-edge"))
+        self.controls.frame_spin.setValue(self.settings.get_double("frame-percent"))
+        self._settings_guard = False
+        self.controls.custom_box.setVisible(
+            self.controls.aspect_preset() == "Custom"
+        )
+        self.controls.refresh_result()
+
+    def _on_aspect_changed(self) -> None:
+        if self._settings_guard:
+            return
+        self.settings.set_string(
+            "aspect-preset", self.controls.aspect_preset().lower()
+        )
+
+    def _on_custom_aspect_changed(self) -> None:
+        if self._settings_guard:
+            return
+        self.settings.set_int(
+            "aspect-num", self.controls.aspect_num_spin.value()
+        )
+        self.settings.set_int("aspect-den", self.controls.aspect_den_spin.value())
+
+    def _on_orientation_changed(self) -> None:
+        if self._settings_guard:
+            return
+        self.settings.set_boolean(
+            "orientation-portrait", self.controls.is_portrait()
+        )
+
+    def _on_short_edge_changed(self) -> None:
+        if self._settings_guard:
+            return
+        self.settings.set_int("short-edge", self.controls.short_edge())
+
+    def _on_frame_changed(self, value: float) -> None:
+        if self._settings_guard:
+            return
+        self.settings.set_double("frame-percent", round(value, 2))
+
+    # -- settings dialog / about -------------------------------------------------
 
     def _on_settings(self) -> None:
-        """Settings dialog — Phase 6."""
+        if self._settings_dialog is not None and self._settings_dialog.isVisible():
+            return
+        self._settings_dialog = SettingsDialog(self.settings, self)
+        self._settings_dialog.show()
 
     def _on_about(self) -> None:
         if self._about_box is not None and self._about_box.isVisible():
