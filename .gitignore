@@ -1,6 +1,11 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-qt/
 .pi/
+# Qt-migration dev artifacts (EGL shim, offscreen screenshots)
+.agent/feature-migration-qt/qtlibs/
+.agent/feature-migration-qt/screenshots/
+.agent/feature-migration-qt/venv_install.log
 .idea/
 .DS_Store
