@@ -20,6 +20,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QMenu,
     QMainWindow,
@@ -212,15 +213,19 @@ class FramerWindow(QMainWindow):
     def _on_add_files(self) -> None:
         # Non-native dialog: deterministic offscreen; on a desktop the
         # native one can be enabled with one flag (plan risk note).
-        paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Add Images",
-            "",
-            self._image_filter(),
-            options=QFileDialog.Option.DontUseNativeDialog,
-        )
-        if paths:
-            self.add_paths([Path(p) for p in paths])
+        #
+        # Qt 6.11 ordering trap: with a platform theme that provides a
+        # native file dialog (gtk3 on GNOME), the dialog's widgets are
+        # only created once DontUseNativeDialog is set, and a
+        # setFileMode() before that is silently skipped — so the static
+        # getOpenFileNames() leaves the file list at SingleSelection and
+        # Ctrl+click cannot multi-select. Build the dialog by hand:
+        # option first, then the mode.
+        dialog = QFileDialog(self, "Add Images", "", self._image_filter())
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.add_paths([Path(p) for p in dialog.selectedFiles()])
 
     def _on_add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(

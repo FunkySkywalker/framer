@@ -53,9 +53,22 @@ from PySide6.QtCore import (  # noqa: E402
     QMimeData,
     QPoint,
     QUrl,
+    QTimer,
 )
-from PySide6.QtGui import QDropEvent, QKeySequence, QShortcut  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtGui import (  # noqa: E402
+    QDropEvent,
+    QKeySequence,
+    QShortcut,
+    QStandardItem,
+    QStandardItemModel,
+)
+from PySide6.QtTest import QTest  # noqa: E402
+from PySide6.QtWidgets import (
+    QApplication,  # noqa: E402
+    QAbstractItemView,
+    QFileDialog,
+    QListView,
+)
 
 from framer.qt.window import ACCELERATORS, FramerWindow  # noqa: E402
 
@@ -85,6 +98,8 @@ def main() -> int:
     app = QApplication.instance()
     if app is None:
         app = QApplication(["verify-q5"])
+    if not isinstance(app, QApplication):
+        raise SystemExit("expected a QApplication")
     SCREENSHOTS.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="framer-q5-"))
 
@@ -200,6 +215,76 @@ def main() -> int:
         pump(app, 0.1)
     check("about dialog closed",
           window._about_box is None or not window._about_box.isVisible())
+
+    # -- file picker: multi-select regression (Qt 6.11 ordering trap) ---------
+    # The app builds the dialog by hand (option first, then mode) so the
+    # file list ends up ExtendedSelection even when a platform theme would
+    # otherwise defer widget creation. Drive the real _on_add_files() and
+    # inspect the live dialog; the offscreen QFileSystemModel cannot load
+    # directory contents, so a stub model stands in for the click test.
+    picker_state: dict = {}
+
+    def _picker_probe() -> None:
+        try:
+            dlg = next(w for w in app.topLevelWidgets()
+                       if isinstance(w, QFileDialog) and w.isVisible())
+            view = dlg.findChild(QListView, "listView")
+            if view is None:
+                raise RuntimeError("file list view missing")
+            picker_state["selmode"] = view.selectionMode()
+            stub = QStandardItemModel()
+            for n in ("m1.png", "m2.png"):
+                stub.appendRow(QStandardItem(n))
+            view.setModel(stub)
+            sm = view.selectionModel()
+            dlg.resize(900, 600)
+            app.processEvents()
+
+            def _click(name: str, mods: _Qt.KeyboardModifier) -> None:
+                for i in range(stub.rowCount()):
+                    if stub.index(i, 0).data() == name:
+                        r = view.visualRect(stub.index(i, 0))
+                QTest.mouseClick(
+                    view.viewport(), _Qt.MouseButton.LeftButton, mods, r.center()
+                )
+                app.processEvents()
+
+            _click("m1.png", _Qt.KeyboardModifier.NoModifier)
+            _click("m2.png", _Qt.KeyboardModifier.ControlModifier)
+            picker_state["sel"] = sorted(
+                stub.index(x.row(), 0).data() for x in sm.selectedRows()
+            )
+            dlg.reject()
+        except Exception as exc:  # noqa: BLE001
+            picker_state["error"] = f"{type(exc).__name__}: {exc}"
+            # never leave the modal exec() hanging
+            for w in app.topLevelWidgets():
+                if isinstance(w, QFileDialog) and w.isVisible():
+                    w.reject()
+
+    def _picker_schedule(attempts: int = 0) -> None:
+        if attempts > 100:
+            picker_state.setdefault("error", "dialog never appeared")
+            return
+        if not any(isinstance(w, QFileDialog) and w.isVisible()
+                   for w in app.topLevelWidgets()):
+            QTimer.singleShot(50, lambda: _picker_schedule(attempts + 1))
+            return
+        _picker_probe()
+
+    QTimer.singleShot(200, _picker_schedule)
+    window._handlers["add-files"]()
+    pump(app, 1.0)
+    check("file picker probe ran",
+          "error" not in picker_state, picker_state.get("error", ""))
+    check("file picker list view is ExtendedSelection",
+          picker_state.get("selmode")
+          == QAbstractItemView.SelectionMode.ExtendedSelection,
+          f"got {picker_state.get('selmode')}")
+    check("file picker Ctrl+click multi-selects",
+          picker_state.get("sel") == ["m1.png", "m2.png"],
+          f"got {picker_state.get('sel')}")
+    check("picker cancel adds nothing", len(window.view.items()) == 4)
 
     window._handlers["clear"]()
     check("clear removes all rows", len(window.view.items()) == 0)
