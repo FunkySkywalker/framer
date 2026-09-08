@@ -18,7 +18,7 @@
 | 1 | Environment + scaffolding | ✅ Done | venv + EGL shim + minimal app + shot.py verified offscreen |
 | 2 | Qt event plumbing (bus, dispatcher, thumbnails) | ✅ Done | 18/18 offscreen checks pass; BatchJob `bus` hint decoupled |
 | 3 | Queue UI (empty state + rows) | ✅ Done | 22/22 checks pass; both screenshots reviewed |
-| 4 | Bottom control bar (output / frame / progress rows) | ⬜ Pending | |
+| 4 | Bottom control bar (output / frame / progress rows) | ✅ Done | 24/24 checks pass; idle + running screenshots reviewed |
 | 5 | Window chrome: toolbar, menu, accelerators, dialogs, DnD, toasts | ⬜ Pending | |
 | 6 | Settings persistence, settings dialog, full wiring | ⬜ Pending | |
 | 7 | Theming — cross-DE/OS appearance (GNOME/KDE/Windows) | ⬜ Pending | |
@@ -72,7 +72,7 @@
 
 ### ✅ Phase 3: Queue UI (empty state + rows)
 - **Finished:** 2026-09-08T10:58:00+00:00
-- **Commits:** `xxxxx` — Phase 3: queue UI (widgets, icons, queue row/view)
+- **Commits:** `7d04f2a` — Phase 3: queue UI (widgets, icons, queue row/view)
 - **Notes:** `framer/qt/widgets.py` (Spinner: 16 px QPainter arc, 100 ms
   timer, palette Highlight; `icon(name)`: system theme → QStyle standard →
   bundled SVG; `dim_label()` = palette Text @ alpha 140 + `dim` property for
@@ -96,3 +96,30 @@
   centered (icon/title/desc/button), rows show meta line, blue spinner arc,
   green ok check, red error icon, slashed-image placeholder, Queued/
   Cancelled labels.
+
+### ✅ Phase 4: Bottom control bar (output / frame / progress rows)
+- **Finished:** 2026-09-08T11:07:00+00:00
+- **Commits:** `xxxxx` — Phase 4: bottom control bar (controls.py)
+- **Notes:** `framer/qt/controls.py` (Controls: output row — aspect combo
+  5:4/19:16/Custom + plain-widget "revealer" for the 1–999 A:B spin pair,
+  Landscape/Portrait checkable toggle with label flip, short-edge spin
+  16–8192, dim live `Result: W × H` label refreshed via
+  `core.framing.target_canvas` on EVERY control change; frame row —
+  title + subtitle, QSlider(0–2000)/100 ↔ QDoubleSpinBox(0.00–20.00, step
+  0.01, 2 decimals) with change-guards, % label, Start Framing (play icon,
+  objectName StartFramingButton, initially disabled) + Cancel (stop icon,
+  disabled); progress row — Spinner, hexpanding dim status label, 160 px
+  QProgressBar with percent text). Signals: aspect_changed,
+  orientation_changed, short_edge_changed, frame_percent_changed; hooks:
+  set_running/set_progress/set_start_enabled/set_result_label/output_spec.
+  **Change from draft:** short-edge change refreshes the result label
+  internally (plan item 16: recompute on every control change).
+  Verification `scripts/verify_controls.py`: 24/24 pass, incl.
+  1350 × 1080 (5:4/1080 landscape), 1080 × 1350 (portrait), 1283 × 1080
+  (19:16), 1440 × 1080 (custom 4:3), 900 × 720 (short edge); bidirectional
+  slider↔spin sync; full set_running/set_progress state. ty clean. Both
+  screenshots (phase4-controls-idle, phase4-controls-running) reviewed by
+  the main agent. **Process change (user request):** phase verification
+  screenshots are now COMMITTED to git (un-ignored
+  `.agent/feature-migration-qt/screenshots/`; the EGL shim + install log
+  stay local); this commit includes the Phase 1 + 3 screenshots too.

@@ -3,9 +3,9 @@ __pycache__/
 .venv/
 .venv-qt/
 .pi/
-# Qt-migration dev artifacts (EGL shim, offscreen screenshots)
+# Qt-migration dev artifacts (EGL shim binary + install log stay local;
+# screenshots are committed as phase verification evidence)
 .agent/feature-migration-qt/qtlibs/
-.agent/feature-migration-qt/screenshots/
 .agent/feature-migration-qt/venv_install.log
 .idea/
 .DS_Store
