@@ -19,7 +19,7 @@
 | 2 | Qt event plumbing (bus, dispatcher, thumbnails) | ✅ Done | 18/18 offscreen checks pass; BatchJob `bus` hint decoupled |
 | 3 | Queue UI (empty state + rows) | ✅ Done | 22/22 checks pass; both screenshots reviewed |
 | 4 | Bottom control bar (output / frame / progress rows) | ✅ Done | 24/24 checks pass; idle + running screenshots reviewed |
-| 5 | Window chrome: toolbar, menu, accelerators, dialogs, DnD, toasts | ⬜ Pending | |
+| 5 | Window chrome: toolbar, menu, accelerators, dialogs, DnD, toasts | ✅ Done | 25/25 checks pass; 3 screenshots reviewed |
 | 6 | Settings persistence, settings dialog, full wiring | ⬜ Pending | |
 | 7 | Theming — cross-DE/OS appearance (GNOME/KDE/Windows) | ⬜ Pending | |
 | 8 | Cutover, GTK removal, docs | ⬜ Pending | |
@@ -123,3 +123,33 @@
   screenshots are now COMMITTED to git (un-ignored
   `.agent/feature-migration-qt/screenshots/`; the EGL shim + install log
   stay local); this commit includes the Phase 1 + 3 screenshots too.
+
+### ✅ Phase 5: Window chrome (toolbar, menu, accelerators, dialogs, DnD, toasts)
+- **Finished:** 2026-09-08T11:25:00+00:00
+- **Commits:** `xxxxx` — Phase 5: window chrome (toasts, window, app wiring)
+- **Notes:** `framer/qt/toasts.py` (ToastHost wraps the content, floats toasts
+  bottom-right newest-last, 3 s normal / 5 s high auto-hide, high = 2 px
+  error-red border — Qt 6.11 has NO QPalette.Error role (checked at
+  runtime), semantic Qt.GlobalColor.red used instead; module helpers
+  success()/error() match the GTK helper names; toast_history for tests),
+  `framer/qt/window.py` (FramerWindow(QMainWindow): QToolBar with
+  add-images/add-folder tool buttons + right-aligned hamburger QMenu
+  [Clear finished · Clear all · – · Settings… · About Framer · – · Quit],
+  single `_handlers` dict shared by toolbar/menu/QShortcuts; 5 shortcuts
+  Ctrl+O, Ctrl+Shift+O, Ctrl+Return, Ctrl+Period, Ctrl+W; Qt non-native
+  file dialogs with IMAGE_EXTENSIONS filter; dropEvent via
+  mimeData().urls(); add_paths ported 1:1 (scan_folder, is_image_file,
+  resolved-path dedup, probe fallback, "· N frames" meta, thumbnail
+  requests, "N images added"/"N files skipped…" toasts, start re-enable);
+  closeEvent cancels running job + toast + dispatcher.stop());
+  `framer/qt/app.py` now builds the real FramerWindow (placeholder removed).
+  Start/Cancel/Settings handlers are marked Phase 6 stubs (plan split).
+  **Qt pitfalls found:** (1) `QKeySequence("Ctrl+Period")` parses EMPTY —
+  the key-string form is `"Ctrl+."` (Ctrl+Key_Period); (2) build order:
+  hamburger needs the menu before the toolbar is built. Verification
+  `scripts/verify_window.py`: 25/25 pass (mixed add_paths incl. dir + dup +
+  text file, synthesized QDropEvent, all handlers, shortcut key set
+  exactly the plan's five, close). ty clean. Screenshots reviewed: empty
+  window (toolbar + empty state + controls, Start disabled), full window
+  (4 real thumbnails, meta lines, toast bottom-right), menu (exact GTK
+  items).
