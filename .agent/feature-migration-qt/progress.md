@@ -17,7 +17,7 @@
 |---|-------|--------|-------|
 | 1 | Environment + scaffolding | ✅ Done | venv + EGL shim + minimal app + shot.py verified offscreen |
 | 2 | Qt event plumbing (bus, dispatcher, thumbnails) | ✅ Done | 18/18 offscreen checks pass; BatchJob `bus` hint decoupled |
-| 3 | Queue UI (empty state + rows) | ⬜ Pending | |
+| 3 | Queue UI (empty state + rows) | ✅ Done | 22/22 checks pass; both screenshots reviewed |
 | 4 | Bottom control bar (output / frame / progress rows) | ⬜ Pending | |
 | 5 | Window chrome: toolbar, menu, accelerators, dialogs, DnD, toasts | ⬜ Pending | |
 | 6 | Settings persistence, settings dialog, full wiring | ⬜ Pending | |
@@ -45,7 +45,7 @@
 
 ### ✅ Phase 2: Qt event plumbing (bus, dispatcher, thumbnails)
 - **Finished:** 2026-09-08T10:22:00+00:00
-- **Commits:** `xxxxx` — Phase 2: Qt event plumbing (bus, dispatcher, thumbnails)
+- **Commits:** `17da938` — Phase 2: Qt event plumbing (bus, dispatcher, thumbnails)
 - **Notes:** `framer/qt/bus.py` (SignalBus: item_started/item_progress/item_finished/
   job_finished/thumbnail; `object` signal types for the thumbnail payload,
   documented), `framer/qt/dispatcher.py` (QObject + 60 ms QTimer tick,
@@ -62,3 +62,37 @@
   job_finished(5,4,1,0), per-item error isolation, GIF DONE, 4 real
   QPixmaps + None for the corrupt file delivered on the main thread;
   cancel run with a large middle JPEG → job_finished(3,1,0,2) deterministic.
+
+### ⚠️ Infra note (2026-09-08T10:40)
+- Subagent delegation failed twice with the same host bug: the
+  `pi-telegram-plus` extension crashes the async runner process
+  (`formatTelegramStatusLine` → theme getter before `initTheme()`), killing
+  the child before it does any work. Per the stop-delegating rule, Phases 3+
+  are executed inline by the main agent.
+
+### ✅ Phase 3: Queue UI (empty state + rows)
+- **Finished:** 2026-09-08T10:58:00+00:00
+- **Commits:** `xxxxx` — Phase 3: queue UI (widgets, icons, queue row/view)
+- **Notes:** `framer/qt/widgets.py` (Spinner: 16 px QPainter arc, 100 ms
+  timer, palette Highlight; `icon(name)`: system theme → QStyle standard →
+  bundled SVG; `dim_label()` = palette Text @ alpha 140 + `dim` property for
+  Phase 7 QSS), `framer/qt/icons/` (9 bundled mid-gray SVGs),
+  `framer/qt/queue_row.py` (48 px thumb, ellipsizing name label via
+  sizeHint override, dim meta, status: spinner/ok/error/Queued/Cancelled —
+  exact GTK set_state parity incl. error tooltip),
+  `framer/qt/queue_view.py` (empty state w/ icon+title+desc+AddImages
+  button + `add_clicked` signal; QScrollArea + rows layout; queue API:
+  add_item/update_item/set_row_thumbnail/set_row_meta/items/clear/
+  clear_finished, finished = DONE/ERROR/CANCELLED).
+  **Deviations:** `add_item` returns the row (GTK returned None).
+  **Qt pitfalls found (keep for later phases):** (1) a child widget created
+  while its parent is ALREADY visible starts hidden — only children created
+  before the parent's show() inherit visibility; `add_item` now calls
+  `row.show()` explicitly — Phase 5 toast widgets need the same treatment;
+  (2) word-wrapped QLabel defaults to a tiny hint width — empty-state
+  description needed Expanding size policy. Verification
+  `scripts/verify_queue_ui.py`: 22/22 pass. ty clean. Both screenshots
+  (phase3-empty, phase3-queue-mixed) reviewed by the main agent: empty state
+  centered (icon/title/desc/button), rows show meta line, blue spinner arc,
+  green ok check, red error icon, slashed-image placeholder, Queued/
+  Cancelled labels.
