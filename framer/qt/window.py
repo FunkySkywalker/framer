@@ -20,7 +20,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
     QFileDialog,
     QMenu,
     QMainWindow,
@@ -211,28 +210,35 @@ class FramerWindow(QMainWindow):
         return "Images (" + " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTENSIONS)) + ")"
 
     def _on_add_files(self) -> None:
-        # Non-native dialog: deterministic offscreen; on a desktop the
-        # native one can be enabled with one flag (plan risk note).
+        # Native dialog wherever the platform provides one (GNOME gtk3
+        # theme, Windows, macOS) — matches the GTK frontend's native
+        # chooser, and native dialogs multi-select out of the box.
+        # Without a helper (offscreen, bare environments) Qt falls back
+        # to its widget dialog; there the creation order applies
+        # ExtendedSelection correctly, so Ctrl+click works too.
         #
-        # Qt 6.11 ordering trap: with a platform theme that provides a
-        # native file dialog (gtk3 on GNOME), the dialog's widgets are
-        # only created once DontUseNativeDialog is set, and a
-        # setFileMode() before that is silently skipped — so the static
-        # getOpenFileNames() leaves the file list at SingleSelection and
-        # Ctrl+click cannot multi-select. Build the dialog by hand:
-        # option first, then the mode.
-        dialog = QFileDialog(self, "Add Images", "", self._image_filter())
-        dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
-        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.add_paths([Path(p) for p in dialog.selectedFiles()])
+        # Do NOT force DontUseNativeDialog here: with a platform dialog
+        # helper present, the static call then applies ExistingFiles
+        # before the widgets exist and the file list silently stays
+        # SingleSelection (Qt 6.11 ordering trap, see AGENTS.md).
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Add Images",
+            "",
+            self._image_filter(),
+        )
+        if paths:
+            self.add_paths([Path(p) for p in paths])
 
     def _on_add_folder(self) -> None:
+        # Native folder picker on desktops (same rationale as above).
+        # Directory mode is single-select either way, so the Qt 6.11
+        # ordering trap is behavior-neutral here - but keep the
+        # consistent no-options static call regardless.
         folder = QFileDialog.getExistingDirectory(
             self,
             "Add Folder",
             "",
-            QFileDialog.Option.DontUseNativeDialog,
         )
         if folder:
             self.add_paths([Path(folder)])

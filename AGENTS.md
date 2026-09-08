@@ -148,8 +148,11 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
     static call sets `ExistingFiles` while a platform file-dialog
     helper defers widget creation, so the `ExtendedSelection` assignment
     is skipped and the file list stays `SingleSelection` (Ctrl+click
-    dead). Build the dialog by hand: `setOption(DontUseNativeDialog)`
-    FIRST, then `setFileMode(ExistingFiles)` (see `_on_add_files`).
+    dead). So `_on_add_files`/`_on_add_folder` use the plain static
+    calls — native dialog on desktops (multi-selects out of the box),
+    widget-dialog fallback elsewhere where the order works out. If you
+    must force `DontUseNativeDialog`, build the dialog by hand:
+    `setOption` FIRST, then `setFileMode(ExistingFiles)`.
   - No `QPalette.Error` role — the palette Highlight doubles as the
     needs-attention accent (high-priority toasts).
   - `.clicked` fires only for user clicks — programmatic state changes

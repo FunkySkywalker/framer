@@ -217,11 +217,12 @@ def main() -> int:
           window._about_box is None or not window._about_box.isVisible())
 
     # -- file picker: multi-select regression (Qt 6.11 ordering trap) ---------
-    # The app builds the dialog by hand (option first, then mode) so the
-    # file list ends up ExtendedSelection even when a platform theme would
-    # otherwise defer widget creation. Drive the real _on_add_files() and
-    # inspect the live dialog; the offscreen QFileSystemModel cannot load
-    # directory contents, so a stub model stands in for the click test.
+    # The app uses the plain static getOpenFileNames() (native dialog on
+    # desktops, widget dialog as fallback). Offscreen there is no platform
+    # dialog helper, so the widget dialog is used and its creation order
+    # applies ExtendedSelection. Drive the real _on_add_files() and inspect
+    # the live dialog; the offscreen QFileSystemModel cannot load directory
+    # contents, so a stub model stands in for the click test.
     picker_state: dict = {}
 
     def _picker_probe() -> None:

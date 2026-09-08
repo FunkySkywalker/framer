@@ -46,13 +46,25 @@ Could not reproduce on the user's exact GNOME session from this headless
 box (xcb needs libxcb-cursor0, not installed, no root); the mechanism is
 pinned by the Qt source trace + same-state empirical repro above.
 
-## Fix
+## Fix (v2 — user's call: use the working version)
 
-`framer/qt/window.py::_on_add_files`: build the dialog by hand in the
-order that survives both worlds — `setOption(DontUseNativeDialog)`
-**first** (forces widget creation), then `setFileMode(ExistingFiles)`
-(applies ExtendedSelection to the live view). `exec()` +
-`selectedFiles()` replaces the static call.
+v1 (commit `18df0f7`) built the dialog by hand (option first, then
+mode) to make the *widget* dialog multi-select on desktops. The user
+then asked for the version that behaves like the standard idiom:
+**native dialog on desktops, widget fallback elsewhere** — i.e. the
+plain static calls **without** `DontUseNativeDialog`:
+
+- `framer/qt/window.py::_on_add_files` →
+  `QFileDialog.getOpenFileNames(self, "Add Images", "", filter)`
+  (native GTK/Windows/macOS chooser with native multi-select;
+  offscreen has no dialog helper → widget dialog, whose creation
+  order applies ExtendedSelection correctly).
+- `framer/qt/window.py::_on_add_folder` → same treatment (Directory
+  mode is single-select either way; kept for consistency + GTK parity).
+
+The AGENTS.md pitfall bullet now documents both the trap and the
+chosen approach (plain static calls; if you ever must force
+`DontUseNativeDialog`, `setOption` before `setFileMode`).
 
 ## Verification plan
 
@@ -69,18 +81,21 @@ order that survives both worlds — `setOption(DontUseNativeDialog)`
 
 | # | Step | Status | Notes |
 |---|------|--------|-------|
-| 1 | Fix `_on_add_files` ordering | ✅ Done | dialog built by hand |
-| 2 | Regression test in verify_window.py | ✅ Done | 4 new checks, all pass |
-| 3 | Full verification suite + ty | ✅ Done | 6/6 scripts ALL PASS, ty clean |
-| 4 | User-machine confirmation | ⬜ | pending: Ctrl+click in picker |
+| 1 | Fix v1: hand-built dialog ordering | ✅ Done | `18df0f7` |
+| 2 | Regression test in verify_window.py | ✅ Done | 4 checks, pass under both fix versions |
+| 3 | Fix v2: native dialog (plain static calls) | ✅ Done | per user: "the version that works" |
+| 4 | Full verification suite + ty | ✅ Done | 6/6 scripts ALL PASS, ty clean |
+| 5 | User-machine confirmation | ⬜ | pending: native picker + Ctrl+click |
 
 ## Summary
 
-- **Fix:** `framer/qt/window.py::_on_add_files` now builds the
-  `QFileDialog` by hand — `setOption(DontUseNativeDialog)` **before**
-  `setFileMode(ExistingFiles)` — so the `ExtendedSelection` assignment
-  lands on the real (late-created) file-list view instead of being
-  silently skipped by `setFileMode()`'s `!usingWidgets()` early return.
+- **Root cause:** Qt 6.11 ordering trap in the static `getOpenFileNames`
+  + `DontUseNativeDialog` combination when a platform file-dialog helper
+  exists (undocumented upstream; not found in docs/Jira/git history).
+- **Fix (final, v2):** plain static `getOpenFileNames` /
+  `getExistingDirectory` calls — native dialog on desktops (native
+  multi-select, matches the GTK frontend's native chooser), widget
+  dialog as fallback where the creation order is benign.
 - **Regression test:** `scripts/verify_window.py` drives the real
   `_on_add_files()` offscreen, asserts `ExtendedSelection` on the live
   dialog's file list and that plain-click + Ctrl+click selects two files
@@ -88,6 +103,7 @@ order that survives both worlds — `setOption(DontUseNativeDialog)`
   contents).
 - **Verification:** all 6 offscreen scripts ALL PASS; `ty check` clean
   on `framer/qt/` + `scripts/`.
-- **Follow-up:** user confirms multi-select on the desktop (GNOME /
-  gtk3 theme); the exact bug path (native helper active) is unreachable
-  from this headless box (xcb needs libxcb-cursor0, not installed).
+- **Follow-up:** user confirms on the desktop that the picker is now
+  the native chooser and Ctrl+click multi-selects. If they ever force
+  `DontUseNativeDialog` again, the AGENTS.md bullet covers the required
+  ordering.
