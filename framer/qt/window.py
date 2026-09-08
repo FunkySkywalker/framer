@@ -19,6 +19,7 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QMenu,
     QMainWindow,
@@ -40,6 +41,7 @@ from .dialogs import SettingsDialog
 from .dispatcher import Dispatcher
 from .queue_view import QueueView
 from .settings import Settings
+from .theme import apply_theme
 from .toasts import ToastHost, error as toast_error, success as toast_success
 from .widgets import icon
 from ..workers.batch_worker import BatchJob
@@ -61,6 +63,11 @@ class FramerWindow(QMainWindow):
         self, files: Optional[list[Path]] = None, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
+        # idempotent; also covers direct construction (verification
+        # scripts) where FramerQtApp never ran
+        inst = QApplication.instance()
+        if isinstance(inst, QApplication):
+            apply_theme(inst)
         self.setWindowTitle("Framer")
         self.setWindowIcon(icon("generic-image"))
         self.resize(1100, 760)
@@ -128,6 +135,11 @@ class FramerWindow(QMainWindow):
         self.controls.frame_percent_changed.connect(self._on_frame_changed)
         self.controls.start_button.clicked.connect(self._on_start)
         self.controls.cancel_button.clicked.connect(self._on_cancel)
+        # accent + native default button (Windows: the Fluent accent
+        # comes from setDefault; Linux: the suggested QSS — theme.py)
+        self.controls.start_button.setDefault(True)
+        self.controls.start_button.setProperty("suggested", True)
+        self.view.add_button.setProperty("suggested", True)
 
         if files:
             self.add_paths(list(files))

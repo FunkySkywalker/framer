@@ -3,14 +3,13 @@
 Port of the GTK ``Adw.Toast`` helpers. Qt has no built-in toast, so
 :class:`ToastHost` wraps the window content and floats toast frames at
 the bottom-right (stacked, newest at the bottom). Auto-hide: normal 3 s,
-high-priority 5 s. High-priority toasts get an Error-role border. Colors
-are read from the live palette at creation time (no hardcoded hex);
-Phase 7 formalizes the palette-derived QSS layer.
+high-priority 5 s. Styling comes from the palette-derived QSS layer
+(``framer.qt.theme.build_qss``) via the ``#toast`` / ``#toast-high``
+object names.
 """
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 NORMAL_TIMEOUT = 3.0
@@ -21,11 +20,12 @@ _TOAST_MAX_W = 420
 
 
 class _Toast(QFrame):
-    """One toast frame: rounded, palette-derived colors."""
+    """One toast frame; colors come from the app QSS (theme.py)."""
 
     def __init__(self, parent: "ToastHost", message: str, high: bool) -> None:
         super().__init__(parent)
         self._host = parent
+        self.setObjectName("toast-high" if high else "toast")
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -37,23 +37,6 @@ class _Toast(QFrame):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         lay.addWidget(self.label)
-
-        pal = parent.palette()
-        bg = pal.color(QPalette.ColorRole.Window)
-        fg = pal.color(QPalette.ColorRole.Text)
-        # Qt 6.11 has no Error palette role (checked at runtime); the
-        # semantic Qt red is the error color until a DE palette exposes
-        # a better one (Phase 7 may revisit).
-        border = QColor(Qt.GlobalColor.red) if high else pal.color(
-            QPalette.ColorRole.Button
-        )
-        border_width = 2 if high else 1
-        self.setStyleSheet(
-            "QFrame { background: %s; color: %s; border: %dp solid %s;"
-            " border-radius: 8px; }"
-            "QLabel { background: transparent; color: %s; }"
-            % (bg.name(), fg.name(), border_width, border.name(), fg.name())
-        )
         self.adjustSize()
 
     def dismiss(self) -> None:
@@ -106,6 +89,10 @@ class ToastHost(QWidget):
     def _dismiss(self, t: _Toast) -> None:
         if t in self._toasts:
             self._toasts.remove(t)
+        # hide immediately (deferred deletion only runs inside an event
+        # loop — manual processEvents() pumps never flush it), destroy
+        # later
+        t.hide()
         t.deleteLater()
         self._relayout()
 

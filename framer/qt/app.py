@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
+from .theme import apply_theme, pre_setup_environment
 from .window import FramerWindow
 
 ORGANIZATION = "com.funkyskywalker"
@@ -28,10 +29,13 @@ class FramerQtApp(QObject):
         files: list[Path] | None = None,
     ) -> None:
         super().__init__()
+        # must run before the QApplication exists (gtk3 platform theme)
+        pre_setup_environment()
         self.app = QApplication(argv if argv is not None else sys.argv)
         self.app.setOrganizationName(ORGANIZATION)
         self.app.setApplicationName(APPLICATION)
         self.app.setApplicationDisplayName(APPLICATION)
+        apply_theme(self.app)
         self.window = FramerWindow(files=files)
 
     def run(self) -> int:
