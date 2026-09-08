@@ -143,6 +143,13 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
     `isinstance`.
   - `QImage.loadFromData(png)` — pass no format arg (str and bytes are
     both rejected at runtime).
+  - `QFileDialog.getOpenFileNames()` + `DontUseNativeDialog` silently
+    loses multi-select under the gtk3 platform theme (GNOME): the
+    static call sets `ExistingFiles` while a platform file-dialog
+    helper defers widget creation, so the `ExtendedSelection` assignment
+    is skipped and the file list stays `SingleSelection` (Ctrl+click
+    dead). Build the dialog by hand: `setOption(DontUseNativeDialog)`
+    FIRST, then `setFileMode(ExistingFiles)` (see `_on_add_files`).
   - No `QPalette.Error` role — the palette Highlight doubles as the
     needs-attention accent (high-priority toasts).
   - `.clicked` fires only for user clicks — programmatic state changes
