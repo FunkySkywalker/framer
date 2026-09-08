@@ -8,7 +8,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk
 
-from ..core.framing import (
+from ...core.framing import (
     FRAME_PERCENT_DEFAULT,
     FRAME_PERCENT_MAX,
     FRAME_PERCENT_MIN,
@@ -16,7 +16,7 @@ from ..core.framing import (
     SHORT_EDGE_MAX,
     SHORT_EDGE_MIN,
 )
-from ..core.models import ItemState, QueueItem
+from ...core.models import ItemState, QueueItem
 from .queue_row import QueueRow
 
 

@@ -17,7 +17,7 @@ import gi
 gi.require_version("GLib", "2.0")
 from gi.repository import GLib
 
-from ..utils.thumbnails import make_thumbnail
+from .thumbnails import make_thumbnail
 from .signals import SignalBus
 
 TICK_MS = 60

@@ -10,11 +10,14 @@ Hard rules for agentic work in this repository.
 - **All GTK calls happen on the main thread only**, and only through the
   Dispatcher's signal emissions. Worker threads push plain event tuples
   onto `queue.Queue`s; they never touch GTK, GLib UI APIs, or the UI tree.
-- `framer/utils/thumbnails.py` is the one sanctioned exception: it
+- `framer/gtk/thumbnails.py` is the one sanctioned exception: it
   produces `Gdk.Texture`s on the Dispatcher's thread pool (thread-safe
   load path) and the *result* is consumed on the main thread.
-- `framer/workers/` is the only layer where threads and the GLib main
-  loop meet.
+- The two frontends are symmetric: `framer/gtk/` (PyGObject) and
+  `framer/qt/` (PySide6) are the only places that import their GUI
+  toolkit; `framer/core/`, `framer/workers/`, and `framer/utils/` are
+  pure and shared. (`grep -rln "PySide6\|shiboken" framer/core/`
+  framer/workers/ framer/utils/ → no hits.)
 
 ## Geometry law
 
@@ -41,16 +44,23 @@ Hard rules for agentic work in this repository.
 
 ## How to run
 
-- System Python: `python3 main.py` (Ubuntu 26.04 desktop has PyGObject,
-  GTK 4.22, Libadwaita 1.9, Pillow 12).
-- venv: `python3 -m venv --system-site-packages .venv && .venv/bin/pip
-  install -r requirements.txt && .venv/bin/python main.py`
+Two frontends exist during the Qt migration (see
+`.agent/feature-migration-qt/plan.md`); Phase 8 removes the GTK one.
+
+- GTK app: `python3 main.py` (Ubuntu 26.04 desktop has PyGObject, GTK
+  4.22, Libadwaita 1.9, Pillow 12).
+- GTK app in a venv: `python3 -m venv --system-site-packages .venv &&
+  .venv/bin/pip install -r requirements.txt && .venv/bin/python main.py`
   (the isolated default venv cannot see system PyGObject).
+- Qt app: `.venv-qt/bin/python main_qt.py` (venv: `python3 -m venv
+  .venv-qt && .venv-qt/bin/pip install PySide6 Pillow`).
 
 ## Headless smoke test (no display needed)
 
-- Import: `python3 -c "import gi; gi.require_version('Gtk','4.0');
-  gi.require_version('Adw','1'); import framer.app; print('ok')"`
+- GTK import: `python3 -c "import gi; gi.require_version('Gtk','4.0');
+  gi.require_version('Adw','1'); import framer.gtk.app; print('ok')"`
+- Qt import: `QT_QPA_PLATFORM=offscreen .venv-qt/bin/python -c
+  "import framer.qt.app; print('ok')"`
 - Math: exercise `framer.core.framing` (target_canvas vectors,
   frame_geometry sweeps, content_fit no-cropping invariant) and
   `framer.core.image_io.frame_image` with synthetic images (EXIF/ICC
@@ -59,16 +69,26 @@ Hard rules for agentic work in this repository.
 ## File map
 
 ```
-main.py                      thin CLI entry
+main.py                      thin CLI entry — GTK (Phase 8 → Qt)
+main_qt.py                   thin CLI entry — Qt
 data/                        .desktop + GSettings schema
 framer/
-  app.py                     Adw.Application, settings service (fallback)
-  window.py                  window, file input, settings binding, jobs
   core/                      PURE (models, framing, image_io, scanner, output)
-  workers/                   SignalBus, BatchJob (thread), Dispatcher (60 ms tick)
-  views/                     QueueRow, QueueView (+ 3-row bottom controls)
-  ui/                        Actions (menu/accels), toast helpers
-  utils/                     paths (pure), thumbnails (thread-pool)
+  workers/                   batch_worker (BatchJob thread) — pure, shared
+  utils/                     paths (pure)
+  gtk/                       GTK4/Libadwaita frontend (frozen; removed in Phase 8)
+    app.py                   Adw.Application, settings service (fallback)
+    window.py                window, file input, settings binding, jobs
+    views/                   QueueRow, QueueView (+ 3-row bottom controls)
+    ui/                      Actions (menu/accels), toast helpers
+    dispatcher.py            SignalBus + 60 ms GLib tick
+    thumbnails.py            thread-pool Gdk.Texture factory
+  qt/                        PySide6 frontend (migration target)
+    app.py                   FramerQtApp (QApplication + theme + window)
+    window.py                window, file input, settings binding, jobs
+    queue_row.py / queue_view.py / controls.py / dialogs.py / settings.py
+    bus.py / dispatcher.py   SignalBus + 60 ms QTimer tick
+    theme.py / toasts.py / widgets.py / thumbnails.py / icons/
 ```
 
 ## Adding image formats
@@ -81,7 +101,7 @@ framer/
 
 When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
 
-## API notes (this machine: GTK 4.22 / Libadwaita 1.9)
+## API notes (this machine: GTK 4.22 / Libadwaita 1.9 — for `framer/gtk/`)
 
 - No `Adw.StatusIcon` — use `Gtk.Image` with symbolic icons.
 - No `Adw.FileDialog` — use `Gtk.FileChooserNative` + `Gtk.FileFilter`. Constructor is `new(title: str|None, parent: Gtk.Window|None, action, accept_label, cancel_label)` — first arg is a *string*, not the window. Present it with `show()` — no `present()`; use the `response` signal.
@@ -92,7 +112,7 @@ When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
   track** — it is a drag-to-scrub row + spin button only (verified against the
   1.9.3 template and official doc image). For a *visible* slider use
   `Adw.ActionRow` + suffix box with `Gtk.Scale` + `Gtk.SpinButton` sharing one
-  `Gtk.Adjustment` (see the frame row in `views/queue_view.py`).
+  `Gtk.Adjustment` (see the frame row in `framer/gtk/views/queue_view.py`).
 - `Gtk.Scale.set_width_chars` does not exist in this GTK4 build — size the
   slider with `set_hexpand`/CSS.
 - `Adw.Spinner`: toggle via the `spinning` property (no `set_spinning` in

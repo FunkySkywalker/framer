@@ -14,7 +14,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from framer.app import FramerApplication
+from framer.gtk.app import FramerApplication
 
 
 def main() -> int:

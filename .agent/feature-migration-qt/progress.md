@@ -210,7 +210,8 @@
   FRAMER_COLOR_SCHEME → Fusion + explicit palette (offscreen hook),
   GNOME/other/Windows → platform-supplied style + palette; re-applies the
   QSS on colorSchemeChanged (live light/dark switch). toasts.py: colors
-  moved from inline per-toast stylesheets to the app QSS via #toast /\n  #toast-high object names. window.py: self-applies the theme (covers
+  moved from inline per-toast stylesheets to the app QSS via the
+  #toast / #toast-high object names. window.py: self-applies the theme (covers
   direct construction), start button setDefault + suggested property,
   empty-state add button suggested. app.py: pre_setup_environment() before
   QApplication, apply_theme after. `scripts/theme_report.py`: five variants
@@ -232,3 +233,25 @@
   `scripts/theme_report.py` on Ubuntu GNOME (gtk3 theme active, light +
   dark) and Windows 11 (native Fluent, light + dark); review the sets,
   iterate QSS if needed.
+
+### Refactor (off-plan, user request): GTK frontend into `framer/gtk/`
+- **Finished:** 2026-09-08T13:05:00+00:00
+- **Commits:** `xxxxx` — Restructure: GTK frontend into framer/gtk/
+- **Notes:** Mirror the qt/ layout during the dual-frontend period:
+  `git mv` of `framer/app.py` → `gtk/app.py`, `window.py` → `gtk/window.py`,
+  `views/` → `gtk/views/`, `ui/` → `gtk/ui/`, `workers/dispatcher.py` →
+  `gtk/dispatcher.py`, `workers/signals.py` → `gtk/signals.py`,
+  `utils/thumbnails.py` → `gtk/thumbnails.py`, plus new `gtk/__init__.py`.
+  The shared pure layer is untouched: `core/`, `workers/batch_worker.py`,
+  `utils/paths.py`. Content changes are import lines only (relative
+  depths; `main.py` + `framer/__main__.py` → `framer.gtk.app`);
+  AGENTS.md updated (layering law, run instructions, headless smoke
+  test, file map, API-notes header). Phase 8 deletion becomes
+  `git rm -r framer/gtk/` + the GTK entry bits. Verification:
+  `compileall` clean; AST check that all 54 relative imports in
+  `framer/` resolve; all three Qt verifications still ALL PASS (shared
+  core/worker intact); the repo-wide ty run shows only pre-existing
+  diagnostics (19× gi unresolvable in the PySide6 venv, 8× in untouched
+  core/gtk code). No live GTK import check is possible on this headless
+  VM (no Gtk-4/Adw typelibs in the session) — GTK-app confirmation rides
+  on the same user-machine pass as the Phase 7 theme review.

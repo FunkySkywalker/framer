@@ -9,7 +9,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 from gi.repository import Adw, Gio
 
-from . import APP_ID
+from .. import APP_ID
 from .window import FramerWindow
 
 SCHEMA_ID = APP_ID

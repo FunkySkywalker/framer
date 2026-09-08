@@ -11,17 +11,17 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gdk, Gtk
 
-from . import __version__
-from .core import framing
-from .core.image_io import probe
-from .core.models import ItemState, OutputSpec, QueueItem
-from .core.scanner import scan_folder
+from .. import __version__
+from ..core import framing
+from ..core.image_io import probe
+from ..core.models import ItemState, OutputSpec, QueueItem
+from ..core.scanner import scan_folder
 from .ui.actions import Actions
 from .ui.toast import error_overlay, success_overlay, toast
-from .utils.paths import IMAGE_EXTENSIONS, format_meta, is_image_file
+from ..utils.paths import IMAGE_EXTENSIONS, format_meta, is_image_file
 from .views.queue_view import QueueView
-from .workers.batch_worker import BatchJob
-from .workers.dispatcher import Dispatcher
+from ..workers.batch_worker import BatchJob
+from .dispatcher import Dispatcher
 
 ASPECT_PRESETS = ("5:4", "19:16", "custom")
 PRESET_VALUES = {"5:4": (5, 4), "19:16": (19, 16)}
