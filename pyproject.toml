@@ -1,7 +1,7 @@
 [project]
 name = "framer"
 version = "1.0.0"
-description = "GNOME (GTK4 + Libadwaita) desktop app that batch-frames images onto a user-defined target canvas"
+description = "Desktop app that batch-frames images onto a user-defined target canvas — GTK4 + Libadwaita frontend (default) with a PySide6 frontend in parallel during the Qt migration"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

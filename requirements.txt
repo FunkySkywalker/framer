@@ -6,3 +6,7 @@
 #
 # Pillow: image decode/encode (JPEG, PNG/APNG, TIFF, BMP, WebP, GIF).
 Pillow>=10.0
+#
+# PySide6 (Qt frontend, main_qt.py): installed in the isolated .venv-qt
+# (`.venv-qt/bin/pip install PySide6 Pillow`), intentionally NOT a system
+# requirement; consolidated into this list at the Phase 8 cutover.

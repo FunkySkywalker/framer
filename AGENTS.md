@@ -2,6 +2,10 @@
 
 Hard rules for agentic work in this repository.
 
+Two frontends exist during the Qt migration: `framer/gtk/` (frozen, the
+current default via `main.py`) and `framer/qt/` (migration target via
+`main_qt.py`). Plan + status: `.agent/feature-migration-qt/{plan,progress}.md`.
+
 ## Layering law (do not break)
 
 - `framer/core/` must **never import GTK/GObject** (or anything from
@@ -18,6 +22,10 @@ Hard rules for agentic work in this repository.
   toolkit; `framer/core/`, `framer/workers/`, and `framer/utils/` are
   pure and shared. (`grep -rln "PySide6\|shiboken" framer/core/`
   framer/workers/ framer/utils/ → no hits.)
+- The Qt side mirrors the GLib rules: `framer/qt/dispatcher.py` drains
+  the same queue pattern with a 60 ms `QTimer` on the main thread;
+  `framer/qt/thumbnails.py` is the Qt-side sanctioned exception (PIL →
+  PNG bytes on the pool, QPixmap built on the main thread).
 
 ## Geometry law
 
@@ -26,8 +34,9 @@ Hard rules for agentic work in this repository.
   source of truth. No hardcoded aspect ratios, `0.05`, or `1080` anywhere
   downstream.
 - `OutputSpec` is clamped in **both** core (`models.py`) and the UI
-  (spin ranges / SpinRow adjustment) and is **snapshotted at job start**;
-  all output/frame controls are insensitive while a batch runs.
+  (GTK SpinRow/spin ranges, Qt `controls.py` spin+slider ranges) and is
+  **snapshotted at job start**; all output/frame controls are
+  insensitive while a batch runs.
 
 ## Do-not-break list
 
@@ -59,8 +68,15 @@ Two frontends exist during the Qt migration (see
 
 - GTK import: `python3 -c "import gi; gi.require_version('Gtk','4.0');
   gi.require_version('Adw','1'); import framer.gtk.app; print('ok')"`
-- Qt import: `QT_QPA_PLATFORM=offscreen .venv-qt/bin/python -c
-  "import framer.qt.app; print('ok')"`
+- Qt import: `QT_QPA_PLATFORM=offscreen
+  LD_LIBRARY_PATH=.agent/feature-migration-qt/qtlibs .venv-qt/bin/python
+  -c "import framer.qt.app; print('ok')"` (the LD_LIBRARY_PATH is the EGL
+  shim — see Qt frontend notes)
+- Qt phase verifications (offscreen, all must print ALL PASS):
+  `scripts/verify_qt_plumbing.py`, `verify_queue_ui.py`,
+  `verify_controls.py`, `verify_window.py`, `verify_settings_batch.py`,
+  `scripts/theme_report.py` (each self-re-execs with the offscreen env +
+  shim baked in, so they run plain).
 - Math: exercise `framer.core.framing` (target_canvas vectors,
   frame_geometry sweeps, content_fit no-cropping invariant) and
   `framer.core.image_io.frame_image` with synthetic images (EXIF/ICC
@@ -100,6 +116,63 @@ framer/
 ## Commit style
 
 When pushing to Gitea: author `picode <roman.mikula.picode@funkyskywalker.at>`.
+
+## Qt frontend notes (PySide6 6.11.2 — for `framer/qt/`)
+
+- **Offscreen runs need the EGL shim** (this machine has no libEGL):
+  `QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=.agent/feature-migration-qt/qtlibs
+  .venv-qt/bin/python ...`. The shim is a symlink to Electron's bundled
+  libEGL: `ln -s ~/.hermes/hermes-agent/node_modules/electron/dist/libEGL.so
+  .agent/feature-migration-qt/qtlibs/libEGL.so.1`; `qtlibs/` is
+  gitignored — recreate it if missing. Verification scripts self-re-exec
+  with the env baked in, so run them plain.
+- The gtk3 platform theme ABORTS offscreen ("cannot open display") —
+  never set `QT_QPA_PLATFORMTHEME=gtk3` in offscreen harnesses.
+- **Type check**: `~/.local/bin/ty check --python .venv-qt/bin/python
+  framer/qt/ ...` (system python has no PySide6; the qt venv has no
+  `gi`, so a whole-repo run shows pre-existing gi diagnostics — ignore
+  those, fix the rest).
+- PySide6 6.11.2 pitfalls (all verified on this stack; full history in
+  `progress.md`):
+  - `QButtonBox` is REMOVED — plain `QPushButton`s.
+  - `QKeySequence("Ctrl+Period")` parses empty — the key string is
+    `"Ctrl+."` (Ctrl+Key_Period).
+  - Children created while the parent is already visible start HIDDEN —
+    `show()` them explicitly (queue rows, toasts).
+  - `QApplication.instance()` types as `QCoreApplication` — narrow with
+    `isinstance`.
+  - `QImage.loadFromData(png)` — pass no format arg (str and bytes are
+    both rejected at runtime).
+  - No `QPalette.Error` role — the palette Highlight doubles as the
+    needs-attention accent (high-priority toasts).
+  - `.clicked` fires only for user clicks — programmatic state changes
+    need `.toggled`.
+  - `QSettings.value()` returns mixed types — normalize via `str()`
+    before int/float/bool; identity = org `com.funkyskywalker`, app
+    `Framer` → `$XDG_CONFIG_HOME/com.funkyskywalker/Framer.conf`.
+  - `styleHints().colorScheme()` is a METHOD and the `ColorScheme` enum
+    is NOT exported — compare `str(...).endswith("Dark")`.
+  - `colorSchemeChanged` passes the enum as an argument — connected slots
+    MUST accept extra args.
+  - Manual `processEvents()` NEVER flushes DeferredDelete (only `exec()`
+    does) — `hide()` before `deleteLater()`.
+  - `QScrollArea` frame shape is `QFrame.Shape.NoFrame`; no
+    `SP_FileDialogNewFile`/`SP_BrokenImage`; word-wrapped QLabels need an
+    `Expanding` size policy; sample pixels with `mapTo` (x()/y() are
+    parent-relative).
+- **Theming law** (`framer/qt/theme.py`): every QSS color is computed
+  from the live palette — no hex literals in widget code, no font rules;
+  the Breeze table in `theme.py` is the only sanctioned exception.
+  Platform decisions: GNOME → gtk3 platform theme (env set BEFORE
+  QApplication), Plasma → Fusion + Breeze table, Windows → native style +
+  `setDefault()` accent (no accent QSS), `FRAMER_COLOR_SCHEME=light|dark`
+  forces a palette (also the offscreen hook). The QSS re-applies on
+  `colorSchemeChanged` (live light/dark switching).
+- **Verification convention**: each phase has an offscreen script under
+  `scripts/` and committed screenshots under
+  `.agent/feature-migration-qt/screenshots/` (qtlibs + venv_install.log +
+  theme-fixtures stay gitignored); screenshots must be looked at by the
+  main agent before a phase counts as done.
 
 ## API notes (this machine: GTK 4.22 / Libadwaita 1.9 — for `framer/gtk/`)
 

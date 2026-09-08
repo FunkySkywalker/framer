@@ -1,7 +1,7 @@
 # Framer
 
-A GNOME (GTK 4 + Libadwaita, PyGObject) desktop app that **batch-frames
-images** onto a user-defined **target canvas**:
+A desktop app that **batch-frames images** onto a user-defined
+**target canvas**:
 
 - **Aspect ratio**: presets `5:4` / `19:16`, or a custom configurable `A:B`
   (integers 1–999)
@@ -18,9 +18,15 @@ images** onto a user-defined **target canvas**:
 - **Save**: maximum quality per format, **EXIF and ICC profiles preserved
   verbatim**, multi-frame (GIF / APNG / animated WebP) supported per-frame
 
+Two frontends exist during the [Qt migration](#qt-migration-in-progress):
+the GTK 4 + Libadwaita app (`main.py`, current default) and the PySide6
+app (`main_qt.py`, feature-complete, offscreen-verified). Both share the
+pure core (`framer/core/`) and the batch worker — everything described
+below applies to both.
+
 ## Prerequisites
 
-Ubuntu 26.04 desktop already has everything:
+Ubuntu 26.04 desktop already has everything for the GTK app:
 
 | Package | Provides |
 |---|---|
@@ -28,17 +34,18 @@ Ubuntu 26.04 desktop already has everything:
 | `gir1.2-adw-1` | Libadwaita 1.9 |
 | `Pillow` (12.x on this machine) | image decode/encode |
 
-No downloads are required to run.
+No downloads are required to run the GTK app. The Qt app needs one more
+package, installed in an isolated venv (see below): `PySide6` (6.11.x).
 
 ## Running
 
-**(a) System Python (simplest — recommended):**
+**(a) GTK app — system Python (simplest — recommended):**
 
 ```sh
 python3 main.py [IMAGE ...]
 ```
 
-**(b) venv with system site packages:**
+**(b) GTK app — venv with system site packages:**
 
 ```sh
 rm -rf .venv
@@ -51,7 +58,19 @@ Note: the bundled `.venv` is isolated (no system site packages) and cannot
 see the system PyGObject — recreate it with
 `--system-site-packages` if you want to use it.
 
-### GSettings persistence (optional)
+**(c) Qt app (migration target):**
+
+```sh
+python3 -m venv .venv-qt
+.venv-qt/bin/pip install PySide6 Pillow
+.venv-qt/bin/python main_qt.py [IMAGE ...]
+```
+
+Headless/offscreen: `QT_QPA_PLATFORM=offscreen .venv-qt/bin/python
+scripts/theme_report.py` (this machine additionally needs the EGL shim —
+see `AGENTS.md`, *Qt frontend notes*).
+
+### GSettings persistence (GTK app, optional)
 
 Output directory, suffix, frame thickness, aspect ratio, orientation, and
 short edge persist across sessions when the schema is installed:
@@ -64,6 +83,32 @@ glib-compile-schemas ~/.local/share/glib-2.0/schemas
 
 Without the schema the app falls back to in-memory defaults — everything
 still works, settings just don't survive a restart.
+
+### QSettings persistence (Qt app)
+
+The Qt app persists the **same eight keys with the same defaults** to a
+QSettings INI file: `~/.config/com.funkyskywalker/Framer.conf`. The two
+stores are independent — values are not migrated between them.
+
+## Qt migration (in progress)
+
+The GTK GUI is being replaced by a PySide6 (Qt 6) frontend with full
+functional parity, targeting native appearance on Ubuntu (GNOME/Yaru,
+KDE/Breeze) and Windows 11 (Fluent) — the app follows the system's style,
+palette, font, and icon theme and adds only a minimal palette-derived QSS
+layer.
+
+- **Plan & status**: `.agent/feature-migration-qt/plan.md` (8 phases,
+  verification gates) and `progress.md` (what's done, pitfalls found)
+- **Current state**: Phases 1–7 done — the Qt frontend lives in
+  `framer/qt/` (entry `main_qt.py`) and is verified end-to-end offscreen:
+  full batch runs with EXIF/ICC byte-identity, settings persistence with
+  restart restore, deterministic cancellation, theming across five palette
+  variants. Screenshots: `.agent/feature-migration-qt/screenshots/`
+- **Remaining**: a real-machine theme review (GNOME light + dark, Windows
+  11 light + dark — `.venv-qt/bin/python scripts/theme_report.py`), then
+  the Phase 8 cutover: `main.py` becomes the Qt entry point and
+  `framer/gtk/` is deleted
 
 ## Usage
 
