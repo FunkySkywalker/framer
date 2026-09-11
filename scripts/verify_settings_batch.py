@@ -133,7 +133,10 @@ def main() -> int:
     window.controls.aspect_combo.setCurrentText("Custom")
     window.controls.aspect_num_spin.setValue(4)
     window.controls.aspect_den_spin.setValue(3)
-    window.controls.orientation_button.click()
+    # portrait is already the default; round-trip the toggle to prove
+    # that the explicit "True" below is a user write, not the default
+    window.controls.orientation_button.click()  # -> Landscape
+    window.controls.orientation_button.click()  # -> Portrait
     window.controls.short_edge_spin.setValue(720)
     pump(app, lambda: True, 0.2)
 

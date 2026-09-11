@@ -3,9 +3,11 @@
 A desktop app that **batch-frames images** onto a user-defined
 **target canvas**:
 
-- **Aspect ratio**: presets `5:4` / `19:16`, or a custom configurable `A:B`
-  (integers 1–999)
-- **Orientation**: landscape (as entered) / portrait (flipped)
+- **Aspect ratio**: presets `3:4` (default) / `3:2` / `4:5` / `19:16`, or a
+  custom configurable `A:B` (integers 1–999)
+- **Orientation**: portrait (default) / landscape — the canvas is always
+  in the selected orientation; the ratio is applied (or flipped) to fit
+  it (e.g. `3:2` + portrait → 2:3 canvas)
 - **Short-edge resolution**: 16–8192 px (default 1080) — the short edge of
   the output is exactly this value; the long edge realizes the ratio
   (round-half-up)
@@ -123,8 +125,9 @@ layer.
 
 - **Add Images** (header, `Ctrl+O`) or **Add Folder** (`Ctrl+Shift+O`), or
   drag & drop files/folders into the window
-- **Output row** (bottom): aspect preset (`5:4` / `19:16` / `Custom` with
-  A:B entries), **Landscape/Portrait** flip, **Short edge** in pixels, and
+- **Output row** (bottom): aspect preset (`3:4` / `3:2` / `4:5` / `19:16` /
+  `Custom` with A:B entries), **Portrait/Landscape** flip, **Short edge** in
+  pixels, and
   a live **Result: W × H** preview of the target canvas
 - **Frame row**: **Frame thickness** (slider + numeric entry,
   `0.00–20.00%`, default `5.00`), **Start Framing** (`Ctrl+Return`),

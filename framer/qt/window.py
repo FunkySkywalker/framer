@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..core.framing import normalize_preset
 from ..core.image_io import probe
 from ..core.models import ItemState, QueueItem
 from ..core.scanner import scan_folder
@@ -439,11 +440,9 @@ class FramerWindow(QMainWindow):
         """Settings → controls (startup). The guard suppresses the
         settings re-write that the change handlers would perform."""
         self._settings_guard = True
-        preset = self.settings.get_string("aspect-preset")
-        combo_text = "Custom" if preset == "custom" else preset
-        if combo_text not in ("5:4", "19:16", "Custom"):
-            combo_text = "Custom"
-        self.controls.aspect_combo.setCurrentText(combo_text)
+        self.controls.aspect_combo.setCurrentText(
+            normalize_preset(self.settings.get_string("aspect-preset"))
+        )
         self.controls.aspect_num_spin.setValue(self.settings.get_int("aspect-num"))
         self.controls.aspect_den_spin.setValue(self.settings.get_int("aspect-den"))
         self.controls.orientation_button.setChecked(

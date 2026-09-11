@@ -9,6 +9,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk
 
 from ...core.framing import (
+    ASPECT_PRESETS,
     FRAME_PERCENT_DEFAULT,
     FRAME_PERCENT_MAX,
     FRAME_PERCENT_MIN,
@@ -67,7 +68,7 @@ class QueueView(Gtk.Box):
         label.add_css_class("dim-label")
         self.output_row.append(label)
 
-        self.aspect_combo = Gtk.DropDown.new_from_strings(["5:4", "19:16", "Custom"])
+        self.aspect_combo = Gtk.DropDown.new_from_strings(list(ASPECT_PRESETS))
         self.output_row.append(self.aspect_combo)
 
         self.custom_revealer = Gtk.Revealer()

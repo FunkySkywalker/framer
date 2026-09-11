@@ -81,29 +81,39 @@ def main() -> int:
     app.processEvents()
 
     # -- output row -----------------------------------------------------------
-    check("combo shows the 3 presets",
-          c.aspect_combo.count() == 3
-          and [c.aspect_combo.itemText(i) for i in range(3)]
-          == ["5:4", "19:16", "Custom"],
+    check("combo shows the 5 presets",
+          c.aspect_combo.count() == 5
+          and [c.aspect_combo.itemText(i) for i in range(5)]
+          == ["3:4", "3:2", "4:5", "19:16", "Custom"],
           f"got {[c.aspect_combo.itemText(i) for i in range(c.aspect_combo.count())]}")
+    check("default preset 3:4", c.aspect_combo.currentText() == "3:4")
     check("custom pair hidden initially", not c.custom_box.isVisible())
-    expect_result(c, "default 5:4/1080 landscape", 5, 4, False, 1080)
+    check("default orientation Portrait",
+          c.orientation_button.isChecked()
+          and c.orientation_button.text() == "Portrait")
+    expect_result(c, "default 3:4/1080 portrait", 3, 4, True, 1080)
+    w, h = target_canvas(3, 4, True, 1080)
+    check("default canvas is portrait-shaped (w < h)", w < h,
+          f"got {w} × {h}")
 
-    c.orientation_button.click()  # -> Portrait
+    c.orientation_button.click()  # -> Landscape
     app.processEvents()
-    check("orientation label flips to Portrait",
-          c.orientation_button.text() == "Portrait"
-          and c.orientation_button.isChecked())
-    expect_result(c, "5:4/1080 portrait", 5, 4, True, 1080)
-    c.orientation_button.click()  # -> Landscape again
-    app.processEvents()
-    check("orientation label flips back to Landscape",
+    check("orientation label flips to Landscape",
           c.orientation_button.text() == "Landscape"
           and not c.orientation_button.isChecked())
+    expect_result(c, "3:4/1080 landscape", 3, 4, False, 1080)
+    w, h = target_canvas(3, 4, False, 1080)
+    check("3:4 landscape canvas is landscape-shaped (w > h)", w > h,
+          f"got {w} × {h}")
+    c.orientation_button.click()  # -> Portrait again
+    app.processEvents()
+    check("orientation label flips back to Portrait",
+          c.orientation_button.text() == "Portrait"
+          and c.orientation_button.isChecked())
 
     c.aspect_combo.setCurrentText("19:16")
     app.processEvents()
-    expect_result(c, "19:16/1080 landscape", 19, 16, False, 1080)
+    expect_result(c, "19:16/1080 portrait", 19, 16, True, 1080)
 
     c.aspect_combo.setCurrentText("Custom")
     app.processEvents()
@@ -111,14 +121,17 @@ def main() -> int:
     c.aspect_num_spin.setValue(4)
     c.aspect_den_spin.setValue(3)
     app.processEvents()
-    expect_result(c, "custom 4:3/1080 landscape", 4, 3, False, 1080)
+    expect_result(c, "custom 4:3/1080 portrait", 4, 3, True, 1080)
 
-    c.aspect_combo.setCurrentText("5:4")
+    c.aspect_combo.setCurrentText("4:5")
     app.processEvents()
     check("custom pair hidden for preset", not c.custom_box.isVisible())
     c.short_edge_spin.setValue(720)
     app.processEvents()
-    expect_result(c, "5:4/720 landscape", 5, 4, False, 720)
+    expect_result(c, "4:5/720 portrait", 4, 5, True, 720)
+    w, h = target_canvas(4, 5, True, 720)
+    check("4:5 + portrait stays portrait-shaped (w < h)", w < h,
+          f"got {w} × {h}")
     c.short_edge_spin.setValue(1080)
 
     # -- frame row: slider <-> spinbox sync -----------------------------------
@@ -137,7 +150,7 @@ def main() -> int:
 
     spec = c.output_spec()
     check("output_spec() snapshot",
-          spec == OutputSpec(5, 4, False, 1080, 5.0), f"got {spec}")
+          spec == OutputSpec(4, 5, True, 1080, 5.0), f"got {spec}")
 
     # -- running state ------------------------------------------------------------
     c.set_running(True)

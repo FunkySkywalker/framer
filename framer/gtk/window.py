@@ -13,6 +13,12 @@ from gi.repository import Adw, Gdk, Gtk
 
 from .. import __version__
 from ..core import framing
+from ..core.framing import (
+    ASPECT_PRESETS,
+    CUSTOM_PRESET,
+    PRESET_VALUES,
+    normalize_preset,
+)
 from ..core.image_io import probe
 from ..core.models import ItemState, OutputSpec, QueueItem
 from ..core.scanner import scan_folder
@@ -22,9 +28,6 @@ from ..utils.paths import IMAGE_EXTENSIONS, format_meta, is_image_file
 from .views.queue_view import QueueView
 from ..workers.batch_worker import BatchJob
 from .dispatcher import Dispatcher
-
-ASPECT_PRESETS = ("5:4", "19:16", "custom")
-PRESET_VALUES = {"5:4": (5, 4), "19:16": (19, 16)}
 
 
 class FramerWindow(Adw.ApplicationWindow):
@@ -288,7 +291,7 @@ class FramerWindow(Adw.ApplicationWindow):
 
     def _current_aspect(self) -> tuple[int, int]:
         idx = self.view.aspect_combo.get_selected()
-        if 0 <= idx < len(ASPECT_PRESETS) and ASPECT_PRESETS[idx] != "custom":
+        if 0 <= idx < len(ASPECT_PRESETS) and ASPECT_PRESETS[idx] != CUSTOM_PRESET:
             return PRESET_VALUES[ASPECT_PRESETS[idx]]
         return (
             int(self.view.aspect_num_spin.get_value()),
@@ -401,12 +404,14 @@ class FramerWindow(Adw.ApplicationWindow):
     # -- settings ---------------------------------------------------------------------------
 
     def _set_aspect_combo(self, preset: str) -> None:
-        idx = ASPECT_PRESETS.index(preset) if preset in ASPECT_PRESETS else 2
+        idx = ASPECT_PRESETS.index(normalize_preset(preset))
         self.view.aspect_combo.set_selected(idx)
 
     def _sync_custom_revealer(self) -> None:
         idx = self.view.aspect_combo.get_selected()
-        self.view.custom_revealer.set_reveal_child(idx == 2)
+        self.view.custom_revealer.set_reveal_child(
+            idx == ASPECT_PRESETS.index(CUSTOM_PRESET)
+        )
 
     def _sync_orientation_label(self) -> None:
         self.view.orientation_button.set_label(
@@ -426,7 +431,11 @@ class FramerWindow(Adw.ApplicationWindow):
         if self._settings_guard:
             return
         idx = self.view.aspect_combo.get_selected()
-        preset = ASPECT_PRESETS[idx] if 0 <= idx < len(ASPECT_PRESETS) else "custom"
+        preset = (
+            ASPECT_PRESETS[idx].lower()
+            if 0 <= idx < len(ASPECT_PRESETS)
+            else CUSTOM_PRESET.lower()
+        )
         self.settings.set_string("aspect-preset", preset)
         self._sync_custom_revealer()
         self._refresh_output()

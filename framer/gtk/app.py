@@ -10,6 +10,14 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Adw, Gio
 
 from .. import APP_ID
+from ..core.framing import (
+    DEFAULT_ASPECT_DEN,
+    DEFAULT_ASPECT_NUM,
+    DEFAULT_ASPECT_PRESET,
+    DEFAULT_PORTRAIT,
+    FRAME_PERCENT_DEFAULT,
+    SHORT_EDGE_DEFAULT,
+)
 from .window import FramerWindow
 
 SCHEMA_ID = APP_ID
@@ -18,12 +26,12 @@ SCHEMA_ID = APP_ID
 DEFAULTS = {
     "output-directory": "",
     "suffix": "_framed",
-    "frame-percent": 5.0,
-    "aspect-preset": "5:4",
-    "aspect-num": 3,
-    "aspect-den": 2,
-    "orientation-portrait": False,
-    "short-edge": 1080,
+    "frame-percent": FRAME_PERCENT_DEFAULT,
+    "aspect-preset": DEFAULT_ASPECT_PRESET,
+    "aspect-num": DEFAULT_ASPECT_NUM,
+    "aspect-den": DEFAULT_ASPECT_DEN,
+    "orientation-portrait": DEFAULT_PORTRAIT,
+    "short-edge": SHORT_EDGE_DEFAULT,
 }
 
 

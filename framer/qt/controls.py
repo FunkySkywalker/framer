@@ -23,9 +23,13 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.framing import (
+    ASPECT_PRESETS,
+    CUSTOM_PRESET,
+    DEFAULT_PORTRAIT,
     FRAME_PERCENT_DEFAULT,
     FRAME_PERCENT_MAX,
     FRAME_PERCENT_MIN,
+    PRESET_VALUES,
     SHORT_EDGE_DEFAULT,
     SHORT_EDGE_MAX,
     SHORT_EDGE_MIN,
@@ -33,12 +37,6 @@ from ..core.framing import (
 )
 from ..core.models import OutputSpec
 from .widgets import Spinner, dim_label, icon
-
-ASPECT_PRESETS = ("5:4", "19:16", "Custom")
-PRESET_VALUES: dict[str, tuple[int, int]] = {
-    "5:4": (5, 4),
-    "19:16": (19, 16),
-}
 
 
 class Controls(QWidget):
@@ -64,6 +62,9 @@ class Controls(QWidget):
         root.addWidget(self._build_output_row())
         root.addWidget(self._build_frame_row())
         root.addWidget(self._build_progress_row())
+        # portrait is the default orientation (core default) — set after
+        # the build so the toggle handler can refresh every widget.
+        self.orientation_button.setChecked(DEFAULT_PORTRAIT)
         self._refresh_result()
 
     # -- output row ---------------------------------------------------------
@@ -220,7 +221,7 @@ class Controls(QWidget):
     # -- change handlers ------------------------------------------------------
 
     def _on_aspect_combo_changed(self, _index: int) -> None:
-        self.custom_box.setVisible(self.aspect_combo.currentText() == "Custom")
+        self.custom_box.setVisible(self.aspect_combo.currentText() == CUSTOM_PRESET)
         self._refresh_result()
         self.aspect_changed.emit()
 
@@ -266,7 +267,7 @@ class Controls(QWidget):
         return self.aspect_combo.currentText()
 
     def aspect_ratio(self) -> tuple[int, int]:
-        if self.aspect_preset() == "Custom":
+        if self.aspect_preset() == CUSTOM_PRESET:
             return (
                 self.aspect_num_spin.value(),
                 self.aspect_den_spin.value(),

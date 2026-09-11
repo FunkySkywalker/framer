@@ -16,6 +16,45 @@ SHORT_EDGE_DEFAULT = 1080
 ASPECT_MIN = 1
 ASPECT_MAX = 999
 
+#: Aspect-ratio preset labels shown in the combo — the single source of
+#: truth for both frontends (and the GSettings schema's choices).
+ASPECT_PRESETS = ("3:4", "3:2", "4:5", "19:16", "Custom")
+#: Sentinel label of the custom A:B ratio entry.
+CUSTOM_PRESET = "Custom"
+#: ``(numerator, denominator)`` for each built-in preset.
+PRESET_VALUES = {
+    "3:4": (3, 4),
+    "3:2": (3, 2),
+    "4:5": (4, 5),
+    "19:16": (19, 16),
+}
+
+#: First-run defaults — the GTK/Qt fallback settings services and the
+#: GSettings schema must all use these so they can never drift apart.
+DEFAULT_ASPECT_PRESET = "3:4"
+DEFAULT_ASPECT_NUM = 3
+DEFAULT_ASPECT_DEN = 2
+DEFAULT_PORTRAIT = True
+
+
+def preset_ratio(label: str) -> tuple[int, int] | None:
+    """``(num, den)`` for a built-in preset label, or ``None`` for custom."""
+    return PRESET_VALUES.get(label)
+
+
+def normalize_preset(stored: str) -> str:
+    """Map a persisted preset string onto a combo label.
+
+    Case-insensitive (historically ``"custom"`` was stored lowercase);
+    unknown values (e.g. a preset removed in a newer version) fall back
+    to the custom entry.
+    """
+    lowered = stored.strip().lower()
+    for p in ASPECT_PRESETS:
+        if p.lower() == lowered:
+            return p
+    return CUSTOM_PRESET
+
 
 @dataclass(frozen=True)
 class FrameGeometry:
@@ -72,14 +111,21 @@ def _rhu(num: int, den: int) -> int:
 def target_canvas(a: int, b: int, portrait: bool, short_edge: int) -> tuple[int, int]:
     """Target canvas ``(width, height)`` for aspect ratio ``a:b``.
 
-    Portrait flips the ratio to ``b:a``. The short edge is exactly
-    ``short_edge``; the long edge is the round-half-up realization of the
-    ratio. Inputs are clamped to their valid ranges.
+    The canvas always ends up in the requested orientation: the ratio is
+    applied as entered when its own orientation already matches, and
+    flipped to ``b:a`` otherwise (``3:2`` + portrait → 2:3 canvas,
+    ``3:4`` + portrait stays 3:4, ``3:4`` + landscape → 4:3 canvas).
+    The short edge is exactly ``short_edge``; the long edge is the
+    round-half-up realization of the ratio. Inputs are clamped to their
+    valid ranges.
     """
     a = _clamp_int(a, ASPECT_MIN, ASPECT_MAX)
     b = _clamp_int(b, ASPECT_MIN, ASPECT_MAX)
     s = _clamp_int(short_edge, SHORT_EDGE_MIN, SHORT_EDGE_MAX)
-    ae, be = (b, a) if portrait else (a, b)
+    # Square ratios (a == b) take either orientation without a swap.
+    if (a < b) != portrait:
+        a, b = b, a
+    ae, be = a, b
     # round-half-up of s*ae/be without float error: (2*s*ae + be) // (2*be)
     if ae >= be:
         hc = s
